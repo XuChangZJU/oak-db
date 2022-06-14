@@ -1,0 +1,29 @@
+{
+  "name": "oak-db",
+  "version": "1.0.0",
+  "description": "oak-db",
+  "main": "src/index.ts",
+  "scripts": {
+    "test": "mocha",
+    "make:test:domain": "ts-node script/makeTestDomain.ts"
+  },
+  "dependencies": {
+    "lodash": "^4.17.21",
+    "mysql": "^2.18.1",
+    "mysql2": "^2.3.3",
+    "oak-domain": "file:../oak-domain",
+    "uuid": "^8.3.2"
+  },
+  "author": "XuChang",
+  "license": "ISC",
+  "devDependencies": {
+    "@types/lodash": "^4.14.182",
+    "@types/mocha": "^9.1.1",
+    "@types/node": "^17.0.42",
+    "@types/uuid": "^8.3.4",
+    "mocha": "^10.0.0",
+    "oak-general-business": "file:../oak-general-business",
+    "ts-node": "^10.8.1",
+    "typescript": "^4.7.3"
+  }
+}
