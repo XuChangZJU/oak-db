@@ -10,7 +10,7 @@ describe('test MysqlTranslator', function() {
 
     it('test create', () => {
         const sql = translator.translateCreateEntity('token');
-        console.log(sql);
+        // console.log(sql);
     });
 
     it('test insert', () => {
@@ -39,5 +39,19 @@ describe('test MysqlTranslator', function() {
             },            
         });
         // console.log(sql);
-    })
+    });
+    
+    it('test expression', () => {
+        const sql = translator.translateSelect('token', {
+            data: {
+                id: 1,
+                $expr: {
+                    $dateDiff: [{
+                        "#attr": '$$createAt$$',
+                    }, new Date(), 'd'],
+                }
+            },
+        });
+        console.log(sql);
+    });
 });

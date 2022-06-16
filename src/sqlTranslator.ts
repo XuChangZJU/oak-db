@@ -1,5 +1,6 @@
 import assert from 'assert';
 import { assign, cloneDeep, keys, set } from 'lodash';
+import { DateTime } from 'luxon';
 import { Attribute, DeduceCreateOperationData, DeduceSorterAttr, DeduceSorterItem, EntityDict, Expression, EXPRESSION_PREFIX, Index, Q_FullTextValue, RefOrExpression, StorageSchema } from "oak-domain/lib/types";
 import { DataType } from "oak-domain/lib/types/schema/DataTypes";
 import { judgeRelation } from 'oak-domain/lib/store/relation';
@@ -31,11 +32,11 @@ export abstract class SqlTranslator<ED extends EntityDict> {
                     notNull: true,
                 } as Attribute,
                 $$updateAt$$: {
-                    type: 'date',   
-                    notNull: true,                 
+                    type: 'date',
+                    notNull: true,
                 } as Attribute,
-                $$removeAt$$: {
-                    type: 'date',                    
+                $$deleteAt$$: {
+                    type: 'date',
                 } as Attribute,
                 $$triggerData$$: {
                     type: 'object',
@@ -108,10 +109,10 @@ export abstract class SqlTranslator<ED extends EntityDict> {
                 });
             }
         }
-        
+
         return schema;
     }
-    
+
 
     protected abstract translateAttrProjection(dataType: DataType, alias: string, attr: string): string;
 
@@ -119,7 +120,7 @@ export abstract class SqlTranslator<ED extends EntityDict> {
 
     protected abstract translateFullTextSearch<T extends keyof ED>(value: Q_FullTextValue, entity: T, alias: string): string;
 
-    abstract translateCreateEntity<T extends keyof ED>(entity: T, option: { replace?: boolean }): string;
+    abstract translateCreateEntity<T extends keyof ED>(entity: T, option: { replace?: boolean }): string[];
 
     protected abstract populateSelectStmt(
         projectionText: string,
@@ -141,7 +142,7 @@ export abstract class SqlTranslator<ED extends EntityDict> {
         count?: number,
         params?: any): string;
 
-    protected  abstract populateRemoveStmt(
+    protected abstract populateRemoveStmt(
         removeText: string,
         fromText: string,
         aliasDict: Record<string, string>,
@@ -165,7 +166,7 @@ export abstract class SqlTranslator<ED extends EntityDict> {
         let sql = `insert into \`${storageName as string}\`(`;
 
         const attrs = Object.keys(data[0]).filter(
-            ele => attributes.hasOwnProperty(ele) && attributes[ele].type !== 'ref'
+            ele => attributes.hasOwnProperty(ele)
         );
         attrs.forEach(
             (attr, idx) => {
@@ -176,9 +177,9 @@ export abstract class SqlTranslator<ED extends EntityDict> {
             }
         );
 
-        sql += ' `$$createAt$$, $$updateAt$$) values ';
+        sql += ', `$$createAt$$`, `$$updateAt$$`) values ';
 
-        const now = Date.now();
+        const now = DateTime.now().toFormat('yyyy-LL-dd HH:mm:ss');
         data.forEach(
             (d, dataIndex) => {
                 sql += '(';
@@ -193,7 +194,7 @@ export abstract class SqlTranslator<ED extends EntityDict> {
                         }
                     }
                 );
-                sql += `, ${now}, ${now})`;
+                sql += `, '${now}', '${now}')`;
                 if (dataIndex < data.length - 1) {
                     sql += ',';
                 }
@@ -333,7 +334,7 @@ export abstract class SqlTranslator<ED extends EntityDict> {
             const attr = keys(node)[0];
 
             const rel = judgeRelation(this.schema, entityName, attr);
-            if (typeof rel === 'string')  {
+            if (typeof rel === 'string') {
                 const pathAttr = `${path}${attr}/`;
                 let alias2: string;
                 if (!aliasDict.hasOwnProperty(pathAttr)) {
@@ -645,7 +646,7 @@ export abstract class SqlTranslator<ED extends EntityDict> {
                                 whereText += ` \`${alias}\`.\`${attr}\` = ${this.translateAttrValue(type2, filter2[attr])}`;
                             }
                         }
-    
+
                         whereText + ')';
                         if (idx < Object.keys(filter2).length - 1) {
                             whereText += ' and'
@@ -738,7 +739,7 @@ export abstract class SqlTranslator<ED extends EntityDict> {
                                 projText += ` ${this.translateAttrProjection(type as DataType, alias, attr)} as \`${prefix}${attr}\``;
                             }
                             else {
-                                assert (typeof projection2 === 'string');
+                                assert(typeof projection2 === 'string');
                                 projText += ` ${this.translateAttrProjection(type as DataType, alias, attr)} as \`${prefix}${projection2[attr]}\``;
                             }
                         }
@@ -766,10 +767,24 @@ export abstract class SqlTranslator<ED extends EntityDict> {
         const projText = this.translateProjection(entity, data, aliasDict, projectionRefAlias);
 
         const filterText = this.translateFilter(entity, aliasDict, filterRefAlias, filter, extraWhere);
-        
-        const sorterText = sorter && this.translateSorter(entity, sorter, aliasDict) ;
+
+        const sorterText = sorter && this.translateSorter(entity, sorter, aliasDict);
 
         return this.populateSelectStmt(projText, fromText, aliasDict, filterText, sorterText, indexFrom, count, params);
+    }
+
+    translateCount<T extends keyof ED>(entity: T, selection: Omit<ED[T]['Selection'], 'data' | 'sorter' | 'action'>, params?: SelectParams): string {
+        const { filter } = selection;
+        const { from: fromText, aliasDict, extraWhere, filterRefAlias } = this.analyzeJoin(entity, {
+            filter,
+        });
+
+        const projText = 'count(1)';
+
+        const filterText = this.translateFilter(entity, aliasDict, filterRefAlias, filter, extraWhere);
+
+
+        return this.populateSelectStmt(projText, fromText, aliasDict, filterText, undefined, undefined, undefined, params);
     }
 
     translateRemove<T extends keyof ED>(entity: T, operation: ED[T]['Remove'], params?: SelectParams): string {
@@ -779,7 +794,7 @@ export abstract class SqlTranslator<ED extends EntityDict> {
         const alias = aliasDict['./'];
 
         const filterText = this.translateFilter(entity, aliasDict, filterRefAlias, filter, extraWhere);
-        
+
         const sorterText = sorter && sorter.length > 0 ? this.translateSorter(entity, sorter, aliasDict) : undefined;
 
         return this.populateRemoveStmt(alias, fromText, aliasDict, filterText, sorterText, indexFrom, count, params);

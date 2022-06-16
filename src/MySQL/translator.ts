@@ -1,8 +1,11 @@
 import assert from 'assert';
+import { format } from 'util';
 import { assign } from 'lodash';
-import { EntityDict, Geo, Q_FullTextValue, RefOrExpression, Ref, StorageSchema, Index } from "oak-domain/lib/types";
+import { DateTime } from 'luxon';
+import { EntityDict, Geo, Q_FullTextValue, RefOrExpression, Ref, StorageSchema, Index, RefAttr } from "oak-domain/lib/types";
 import { DataType, DataTypeParams } from "oak-domain/lib/types/schema/DataTypes";
 import { SelectParams, SqlTranslator } from "../sqlTranslator";
+import { isDateExpression } from 'oak-domain/lib/types/Expression';
 
 const GeoTypes = [
     {
@@ -89,7 +92,7 @@ type IndexHint = {
     [k: string]: IndexHint;
 }
 
-interface MySqlSelectParams extends SelectParams {
+export interface MySqlSelectParams extends SelectParams {
     indexHint?: IndexHint;
 }
 
@@ -337,7 +340,7 @@ export class MySqlTranslator<ED extends EntityDict> extends SqlTranslator<ED> {
         }
 
         if (['date'].includes(type)) {
-            return 'bigint ';        // 因为历史原因，date类型用bigint存，Date.now()
+            return 'datetime';
         }
         if (['object', 'array'].includes(type)) {
             return 'text ';
@@ -373,10 +376,10 @@ export class MySqlTranslator<ED extends EntityDict> extends SqlTranslator<ED> {
             }
             case 'date': {
                 if (value instanceof Date) {
-                    return `${value.valueOf()}`;
+                    return DateTime.fromJSDate(value).toFormat('yyyy-LL-dd HH:mm:ss');
                 }
                 else if (typeof value === 'number') {
-                    return `${value}`;
+                    return DateTime.fromMillis(value).toFormat('yyyy-LL-dd HH:mm:ss');
                 }
                 return value as string;
             }
@@ -412,7 +415,7 @@ export class MySqlTranslator<ED extends EntityDict> extends SqlTranslator<ED> {
         );
         return ` match(${columns2.join(',')}) against ('${$search}' in natural language mode)`;
     }
-    translateCreateEntity<T extends keyof ED>(entity: T, options?: { replace?: boolean; }): string {
+    translateCreateEntity<T extends keyof ED>(entity: T, options?: { replace?: boolean; }): string[] {
         const replace = options?.replace;
         const { schema } = this;
         const entityDef = schema[entity];
@@ -420,7 +423,7 @@ export class MySqlTranslator<ED extends EntityDict> extends SqlTranslator<ED> {
 
         // todo view暂还不支持
         const entityType = view ? 'view' : 'table';
-        let sql = !replace ? `create ${entityType} if not exists ` : `create ${entityType} `;
+        let sql = `create ${entityType} `;
         if (storageName) {
             sql += `\`${storageName}\` `;
         }
@@ -444,19 +447,17 @@ export class MySqlTranslator<ED extends EntityDict> extends SqlTranslator<ED> {
                         unique,
                         notNull,
                     } = attrDef;
-                    if (type === 'ref') {
-                        return;
-                    }
                     sql += `\`${attr}\` `
                     sql += this.populateDataTypeDef(type, params) as string;
 
-                    if (notNull) {
+                    if (notNull || type === 'geometry') {
                         sql += ' not null ';
                     }
                     if (unique) {
                         sql += ' unique ';
                     }
                     if (defaultValue !== undefined) {
+                        assert(type !== 'ref');
                         sql += ` default ${this.translateAttrValue(type, defaultValue)}`;
                     }
                     if (attr === 'id') {
@@ -525,11 +526,202 @@ export class MySqlTranslator<ED extends EntityDict> extends SqlTranslator<ED> {
         
         sql += ')';
         
-        return sql;
+        if (!replace) {
+            return [sql];
+        }
+        return [`drop ${entityType} \`${storageName || entity as string}\`;`, sql];
     }
+
+    private translateFnName(fnName: string, argumentNumber: number): string {
+        switch(fnName) {
+            case '$add': {
+                return '%s + %s';
+            }
+            case '$subtract': {
+                return '%s - %s';
+            }
+            case '$multiply': {
+                return '%s * %s';
+            }
+            case '$divide': {
+                return '%s / %s';
+            }
+            case '$abs': {
+                return 'ABS(%s)';
+            }
+            case '$round': {
+                return 'ROUND(%s, %s)';
+            }
+            case '$ceil': {
+                return 'CEIL(%s)';
+            }
+            case '$floor': {
+                return 'FLOOR(%s)';
+            }
+            case '$pow': {
+                return 'POW(%s, %s)';
+            }
+            case '$gt': {
+                return '%s > %s';
+            }
+            case '$gte': {
+                return '%s >= %s';
+            }
+            case '$lt': {
+                return '%s < %s';
+            }
+            case '$lte': {
+                return '%s <= %s';
+            }
+            case '$eq': {
+                return '%s = %s';
+            }
+            case '$ne': {
+                return '%s <> %s';
+            }
+            case '$startsWith': {
+                return '%s like CONCAT(%s, \'%\')';
+            }
+            case '$endsWith': {
+                return '%s like CONCAT(\'%\', %s)';
+            }
+            case '$includes': {
+                return '%s like CONCAT(\'%\', %s, \'%\')';
+            }
+            case '$true': {
+                return '%s = true';
+            }
+            case '$false': {
+                return '%s = false';
+            }
+            case '$and': {
+                let result = '';
+                for (let iter = 0; iter < argumentNumber; iter ++) {
+                    result += '%s';
+                    if (iter < argumentNumber - 1) {
+                        result += ' and ';
+                    }
+                }
+                return result;
+            }
+            case '$or': {
+                let result = '';
+                for (let iter = 0; iter < argumentNumber; iter ++) {
+                    result += '%s';
+                    if (iter < argumentNumber - 1) {
+                        result += ' or ';
+                    }
+                }
+                return result;
+            }
+            case '$not': {
+                return 'not %s';
+            }
+            case '$year': {
+                return 'YEAR(%s)';
+            }
+            case '$month': {
+                return 'MONTH(%s)';
+            }
+            case '$weekday': {
+                return 'WEEKDAY(%s)';
+            }
+            case '$weekOfYear': {
+                return 'WEEKOFYEAR(%s)';
+            }
+            case '$day': {
+                return 'DAY(%s)';
+            }
+            case '$dayOfMonth': {
+                return 'DAYOFMONTH(%s)';
+            }
+            case '$dayOfWeek': {
+                return 'DAYOFWEEK(%s)';
+            }
+            case '$dayOfYear': {
+                return 'DAYOFYEAR(%s)';
+            }
+            case '$dateDiff': {
+                return 'DATEDIFF(%s, %s, %s)';
+            }
+            case '$contains': {
+                return 'ST_CONTAINS(%s, %s)';
+            }
+            case '$distance': {
+                return 'ST_DISTANCE(%s, %s)';
+            }
+            default: {
+                throw new Error(`unrecoganized function ${fnName}`);
+            }
+        }
+    }
+
     protected translateExpression<T extends keyof ED>(alias: string, expression: RefOrExpression<keyof ED[T]["OpSchema"]>, refDict: Record<string, string>): string {
-        throw new Error("Method not implemented.");
+        const translateConstant = (constant: number | string | Date): string => {
+            if (typeof constant === 'string') {
+                return `'${constant}'`;
+            }
+            else if (constant instanceof Date) {
+                return `'${DateTime.fromJSDate(constant).toFormat('yyyy-LL-dd HH:mm:ss')}'`;
+            }
+            else {
+                assert(typeof constant === 'number');
+                return `${constant}`;
+            }
+        };
+        const translateInner = (expr: any): string => {
+            const k = Object.keys(expr);
+            let result: string;
+            if (k.includes('#attr')) {
+                const attrText = `\`${alias}\`.\`${(expr)['#attr']}\``;
+                result = attrText;
+            }
+            else if (k.includes('#refId')) {
+                const refId = (expr)['#refId'];
+                const refAttr = (expr)['#refAttr'];
+                
+                assert(refDict[refId]);
+                const attrText = `\`${refDict[refId]}\`.\`${refAttr}\``;
+                result = attrText;
+            }
+            else {
+                assert (k.length === 1);
+                if ((expr)[k[0]] instanceof Array) {
+                    const fnName = this.translateFnName(k[0], (expr)[k[0]].length);
+                    const args = [fnName];
+                    args.push(...(expr)[k[0]].map(
+                        (ele: any) => {
+                            if (['string', 'number'].includes(typeof ele) || ele instanceof Date) {
+                                return translateConstant(ele);
+                            }
+                            else {
+                                return translateInner(ele);
+                            }
+                        }
+                    ));
+
+                    result = format.apply(null, args);
+                }
+                else {
+                    const fnName = this.translateFnName(k[0], 1);
+                    const args = [fnName];
+                    const arg = (expr)[k[0]];
+                    if (['string', 'number'].includes(typeof arg) || arg instanceof Date) {
+                        args.push(translateConstant(arg));
+                    }
+                    else {
+                        args.push(translateInner(arg));
+                    }
+
+                    result = format.apply(null, args);
+                }
+            }
+            return result;
+        };
+
+        return translateInner(expression);
     }    
+
     protected populateSelectStmt(projectionText: string, fromText: string, aliasDict: Record<string, string>, filterText: string, sorterText?: string, indexFrom?: number, count?: number, params?: MySqlSelectParams): string {
         // todo using index
         let sql = `select ${projectionText} from ${fromText}`;
@@ -553,7 +745,8 @@ export class MySqlTranslator<ED extends EntityDict> extends SqlTranslator<ED> {
     protected populateUpdateStmt(updateText: string, fromText: string, aliasDict: Record<string, string>, filterText: string, sorterText?: string, indexFrom?: number, count?: number, params?: MySqlSelectParams): string {
         // todo using index
         const alias = aliasDict['./'];
-        let sql = `update ${fromText} set ${updateText}, \`${alias}\`.\`$$updateAt$$\` = ${Date.now()}`;
+        const now = DateTime.now().toFormat('yyyy-LL-dd HH:mm:ss');
+        let sql = `update ${fromText} set ${updateText}, \`${alias}\`.\`$$updateAt$$\` = '${now}'`;
         if (filterText) {
             sql += ` where ${filterText}`;
         }
@@ -571,7 +764,8 @@ export class MySqlTranslator<ED extends EntityDict> extends SqlTranslator<ED> {
     protected populateRemoveStmt(removeText: string, fromText: string, aliasDict: Record<string, string>, filterText: string, sorterText?: string, indexFrom?: number, count?: number, params?: MySqlSelectParams): string {
         // todo using index
         const alias = aliasDict['./'];
-        let sql = `update ${fromText} set \`${alias}\`.\`$$removeAt$$\` = ${Date.now()}`;
+        const now = DateTime.now().toFormat('yyyy-LL-dd HH:mm:ss');
+        let sql = `update ${fromText} set \`${alias}\`.\`$$deleteAt$$\` = '${now}'`;
         if (filterText) {
             sql += ` where ${filterText}`;
         }
