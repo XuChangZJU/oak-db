@@ -64,6 +64,9 @@ export class MySqlConnector {
     }
 
     async exec(sql: string, txn?: string): Promise<any> {
+        if (process.env.NODE_ENV === 'development') {
+            console.log(sql);
+        }
         if (txn) {
             const connection = this.txnDict[txn];
             assert(connection);

@@ -54,4 +54,5 @@ describe('test MysqlTranslator', function() {
         });
         console.log(sql);
     });
+    
 });

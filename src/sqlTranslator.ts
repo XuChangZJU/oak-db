@@ -1,12 +1,11 @@
 import assert from 'assert';
-import { assign, cloneDeep, keys, set } from 'lodash';
+import { assign, cloneDeep, intersection, keys, set } from 'lodash';
 import { DateTime } from 'luxon';
-import { Attribute, DeduceCreateOperationData, DeduceSorterAttr, DeduceSorterItem, EntityDict, Expression, EXPRESSION_PREFIX, Index, Q_FullTextValue, RefOrExpression, StorageSchema } from "oak-domain/lib/types";
+import { Attribute, DeduceCreateOperationData, DeduceSorterAttr, DeduceSorterItem, EntityDict, Expression, EXPRESSION_PREFIX, Index, Q_FullTextValue, Ref, RefOrExpression, StorageSchema } from "oak-domain/lib/types";
 import { DataType } from "oak-domain/lib/types/schema/DataTypes";
 import { judgeRelation } from 'oak-domain/lib/store/relation';
 
 export type SelectParams = {
-    forUpdate?: boolean;
 };
 
 export abstract class SqlTranslator<ED extends EntityDict> {
@@ -113,24 +112,25 @@ export abstract class SqlTranslator<ED extends EntityDict> {
         return schema;
     }
 
+    protected abstract getDefaultSelectFilter<T extends keyof ED>(alias: string, hint: ED[T]['Selection']['hint']): string;
 
     protected abstract translateAttrProjection(dataType: DataType, alias: string, attr: string): string;
 
-    protected abstract translateAttrValue(dataType: DataType, value: any): string;
+    protected abstract translateAttrValue(dataType: DataType | Ref, value: any): string;
 
     protected abstract translateFullTextSearch<T extends keyof ED>(value: Q_FullTextValue, entity: T, alias: string): string;
 
     abstract translateCreateEntity<T extends keyof ED>(entity: T, option: { replace?: boolean }): string[];
 
-    protected abstract populateSelectStmt(
+    protected abstract populateSelectStmt<T extends keyof ED>(
         projectionText: string,
         fromText: string,
+        selection: ED[T]['Selection'],
         aliasDict: Record<string, string>,
         filterText: string,
         sorterText?: string,
         indexFrom?: number,
-        count?: number,
-        params?: SelectParams): string;
+        count?: number): string;
 
     protected abstract populateUpdateStmt(
         updateText: string,
@@ -222,20 +222,21 @@ export abstract class SqlTranslator<ED extends EntityDict> {
         filter?: ED[T]['Selection']['filter'];
         sorter?: ED[T]['Selection']['sorter'];
         isStat?: true;
-    }): {
+    }, initialNumber?: number): {
         aliasDict: Record<string, string>;
         projectionRefAlias: Record<string, string>;
         filterRefAlias: Record<string, string>;
         from: string;
         extraWhere: string;
+        currentNumber: number;
     } {
         const { schema } = this;
-        let count = 1;
+        let number = initialNumber || 1;
         const projectionRefAlias: Record<string, string> = {};
         const filterRefAlias: Record<string, string> = {};
         let extraWhere = '';
 
-        const alias = `${entity as string}_${count++}`;
+        const alias = `${entity as string}_${number++}`;
         let from = ` \`${this.getStorageName(entity)}\` \`${alias}\` `;
         const aliasDict: Record<string, string> = {
             './': alias,
@@ -265,7 +266,7 @@ export abstract class SqlTranslator<ED extends EntityDict> {
                             let alias2: string;
                             const pathAttr = `${path}${op}/`;
                             if (!aliasDict.hasOwnProperty(pathAttr)) {
-                                alias2 = `${rel}_${count++}`;
+                                alias2 = `${rel}_${number++}`;
                                 assign(aliasDict, {
                                     [pathAttr]: alias2,
                                 });
@@ -285,7 +286,7 @@ export abstract class SqlTranslator<ED extends EntityDict> {
                             let alias2: string;
                             const pathAttr = `${path}${op}/`;
                             if (!aliasDict.hasOwnProperty(pathAttr)) {
-                                alias2 = `${op}_${count++}`;
+                                alias2 = `${op}_${number++}`;
                                 assign(aliasDict, {
                                     [pathAttr]: alias2,
                                 });
@@ -338,7 +339,7 @@ export abstract class SqlTranslator<ED extends EntityDict> {
                 const pathAttr = `${path}${attr}/`;
                 let alias2: string;
                 if (!aliasDict.hasOwnProperty(pathAttr)) {
-                    alias2 = `${rel}_${count++}`;
+                    alias2 = `${rel}_${number++}`;
                     assign(aliasDict, {
                         [pathAttr]: alias2,
                     });
@@ -358,7 +359,7 @@ export abstract class SqlTranslator<ED extends EntityDict> {
                 const pathAttr = `${path}${attr}/`;
                 let alias2: string;
                 if (!aliasDict.hasOwnProperty(pathAttr)) {
-                    alias2 = `${attr}_${count++}`;
+                    alias2 = `${attr}_${number++}`;
                     assign(aliasDict, {
                         [pathAttr]: alias2,
                     });
@@ -400,11 +401,6 @@ export abstract class SqlTranslator<ED extends EntityDict> {
         }): void => {
             const { attributes } = schema[entityName];
 
-            if (!isStat && attributes.hasOwnProperty('id') && !node.id) {
-                assign(node, {
-                    id: 1,
-                });
-            }
             Object.keys(node).forEach(
                 (attr) => {
                     const rel = judgeRelation(this.schema, entityName, attr);
@@ -413,7 +409,7 @@ export abstract class SqlTranslator<ED extends EntityDict> {
 
                         let alias2: string;
                         if (!aliasDict.hasOwnProperty(pathAttr)) {
-                            alias2 = `${rel}_${count++}`;
+                            alias2 = `${rel}_${number++}`;
                             assign(aliasDict, {
                                 [pathAttr]: alias2,
                             });
@@ -435,7 +431,7 @@ export abstract class SqlTranslator<ED extends EntityDict> {
 
                         let alias2: string;
                         if (!aliasDict.hasOwnProperty(pathAttr)) {
-                            alias2 = `${attr}_${count++}`;
+                            alias2 = `${attr}_${number++}`;
                             assign(aliasDict, {
                                 [pathAttr]: alias2,
                             });
@@ -473,10 +469,11 @@ export abstract class SqlTranslator<ED extends EntityDict> {
             projectionRefAlias,
             filterRefAlias,
             extraWhere,
+            currentNumber: number,
         };
     }
 
-    private translateComparison(attr: string, value: any, type: DataType): string {
+    private translateComparison(attr: string, value: any, type: DataType | Ref): string {
         const SQL_OP: {
             [op: string]: string,
         } = {
@@ -516,11 +513,17 @@ export abstract class SqlTranslator<ED extends EntityDict> {
         return ' is null';
     }
 
-    private translateEvaluation<T extends keyof ED>(attr: string, value: any, entity: T, alias: string, type: DataType): string {
+    private translateEvaluation<T extends keyof ED>(attr: string, value: any, entity: T, alias: string, type: DataType | Ref, initialNumber: number, refAlias: Record<string, string>): {
+        stmt: string;
+        currentNumber: number;
+    } {
         switch (attr) {
             case '$text': {
                 // fulltext search
-                return this.translateFullTextSearch(value, entity, alias);
+                return {
+                    stmt: this.translateFullTextSearch(value, entity, alias),
+                    currentNumber: initialNumber,
+                };
             }
             case '$in':
             case '$nin': {
@@ -531,7 +534,7 @@ export abstract class SqlTranslator<ED extends EntityDict> {
                 if (value instanceof Array) {
                     const values = value.map(
                         (v) => {
-                            if (['varchar', 'char', 'text', 'nvarchar'].includes(type as string)) {
+                            if (['varchar', 'char', 'text', 'nvarchar', 'ref'].includes(type as string)) {
                                 return `'${v}'`;
                             }
                             else {
@@ -540,27 +543,40 @@ export abstract class SqlTranslator<ED extends EntityDict> {
                         }
                     );
                     if (values.length > 0) {
-                        return ` ${IN_OP[attr]}(${values.join(',')})`;
+                        return {
+                            stmt: ` ${IN_OP[attr]}(${values.join(',')})`,
+                            currentNumber: initialNumber,
+                        };
                     }
                     else {
                         if (attr === '$in') {
-                            return ' in (null)';
+                            return {
+                                stmt: ' in (null)',
+                                currentNumber: initialNumber,
+                            };
                         }
                         else {
-                            return ' is not null';
+                            return {
+                                stmt: ' is not null',
+                                currentNumber: initialNumber,
+                            };
                         }
                     }
                 }
                 else {
                     // sub query
-                    return ` ${IN_OP[attr]}(${this.translateSelect(value.$entity, value)})`;
+                    const {stmt: subQueryStmt, currentNumber } = this.translateSelectInner(value.entity, value, initialNumber, refAlias, undefined);
+                    return {
+                        stmt: ` ${IN_OP[attr]}(${subQueryStmt})`,
+                        currentNumber,
+                    };
                 }
             }
             default: {
                 assert('$between' === attr);
                 const values = value.map(
                     (v: string | number) => {
-                        if (['varchar', 'char', 'text', 'nvarchar'].includes(type as string)) {
+                        if (['varchar', 'char', 'text', 'nvarchar', 'ref'].includes(type as string)) {
                             return `'${v}'`;
                         }
                         else {
@@ -568,26 +584,41 @@ export abstract class SqlTranslator<ED extends EntityDict> {
                         }
                     }
                 );
-                return ` between ${values[0]} and ${values[1]}`;
+                return {
+                    stmt: ` between ${values[0]} and ${values[1]}`,
+                    currentNumber: initialNumber,
+                };
             }
         }
     }
 
     private translateFilter<T extends keyof ED>(
         entity: T,
+        selection: Pick<ED[T]['Selection'], 'filter' | 'hint'>,
         aliasDict: Record<string, string>,
         filterRefAlias: Record<string, string>,
-        filter?: ED[T]['Selection']['filter'],
-        extraWhere?: string): string {
+        initialNumber: number,
+        extraWhere?: string): {
+            stmt: string;
+            currentNumber: number;
+        } {
         const { schema } = this;
+        const { filter, hint } = selection;
 
-        const translateInner = <E extends keyof ED>(entity2: E, path: string, filter2?: ED[E]['Selection']['filter'], type?: DataType): string => {
+        let currentNumber = initialNumber;
+        const translateInner = <E extends keyof ED>(entity2: E, path: string, filter2?: ED[E]['Selection']['filter'], type?: DataType | Ref): string => {
             const alias = aliasDict[path];
             const { attributes } = schema[entity2];
-            let whereText = '';
+            let whereText = type ? '' : this.getDefaultSelectFilter(alias, hint);
             if (filter2) {
-                Object.keys(filter2).forEach(
-                    (attr, idx) => {
+                const attrs = Object.keys(filter2).filter(
+                    ele => !ele.startsWith('#')
+                );
+                attrs.forEach(
+                    (attr) => {
+                        if (whereText) {
+                            whereText += ' and '
+                        }
                         whereText + '(';
                         if (['$and', '$or', '$xor', '$not'].includes(attr)) {
                             let result = '';
@@ -622,7 +653,7 @@ export abstract class SqlTranslator<ED extends EntityDict> {
                         }
                         else if (attr.toLowerCase().startsWith(EXPRESSION_PREFIX)) {
                             // expression
-                            whereText += ` (${this.translateExpression(alias, filter2[attr], filterRefAlias)}) as ${attr}`;
+                            whereText += ` (${this.translateExpression(alias, filter2[attr], filterRefAlias)})`;
                         }
                         else if (['$gt', '$gte', '$lt', '$lte', '$eq', '$ne', '$startsWith', '$endsWith', '$includes'].includes(attr)) {
                             whereText += this.translateComparison(attr, filter2[attr], type!);
@@ -631,37 +662,52 @@ export abstract class SqlTranslator<ED extends EntityDict> {
                             whereText += this.translateElement(attr, filter2[attr]);
                         }
                         else if (['$text', '$in', '$nin', '$between'].includes(attr)) {
-                            whereText += this.translateEvaluation(attr, filter2[attr], entity2, alias, type!);
+                            const { stmt, currentNumber: cn2 } = this.translateEvaluation(attr, filter2[attr], entity2, alias, type!, initialNumber, filterRefAlias);
+                            whereText += stmt;
+                            currentNumber = cn2;
                         }
                         else {
-                            assert(attributes.hasOwnProperty(attr));
-                            const { type: type2, ref } = attributes[attr];
-                            if (type2 === 'ref') {
-                                whereText += ` ${translateInner(ref!, `${path}${attr}/`, filter2[attr])}`;
+                            const rel = judgeRelation(this.schema, entity, attr);
+                            if (rel === 2) {
+                                whereText += ` ${translateInner(attr, `${path}${attr}/`, filter2[attr])}`;
                             }
-                            else if (typeof filter2[attr] === 'object' && Object.keys(filter2[attr])[0] && Object.keys(filter2[attr])[0].startsWith('$')) {
-                                whereText += ` \`${alias}\`.\`${attr}\` ${translateInner(entity2, path, filter2[attr], type2)}`
+                            else if (typeof rel === 'string') {
+                                whereText += ` ${translateInner(rel, `${path}${attr}/`, filter2[attr])}`;
                             }
                             else {
-                                whereText += ` \`${alias}\`.\`${attr}\` = ${this.translateAttrValue(type2, filter2[attr])}`;
+                                assert(attributes.hasOwnProperty(attr), `非法的属性${attr}`);
+                                const { type: type2 } = attributes[attr];
+//                                 assert (type2 !== 'ref');
+                                if (typeof filter2[attr] === 'object' && Object.keys(filter2[attr])[0] && Object.keys(filter2[attr])[0].startsWith('$')) {
+                                    whereText += ` \`${alias}\`.\`${attr}\` ${translateInner(entity2, path, filter2[attr], type2)}`
+                                }
+                                else {
+                                    whereText += ` \`${alias}\`.\`${attr}\` = ${this.translateAttrValue(type2, filter2[attr])}`;
+                                }
                             }
                         }
 
                         whereText + ')';
-                        if (idx < Object.keys(filter2).length - 1) {
-                            whereText += ' and'
-                        }
                     }
                 );
+            }
+            if (!whereText) {
+                whereText = 'true';     // 如果为空就赋一个永真条件，以便处理and
             }
             return whereText;
         };
 
         const where = translateInner(entity, './', filter);
         if (extraWhere && where) {
-            return `${extraWhere} and ${where}`;
+            return {
+                stmt: `${extraWhere} and ${where}`,
+                currentNumber,
+            };
         }
-        return extraWhere || where;
+        return {
+            stmt: extraWhere || where,
+            currentNumber,
+        };
     }
 
     private translateSorter<T extends keyof ED>(entity: T, sorter: ED[T]['Selection']['sorter'], aliasDict: Record<string, string>): string {
@@ -718,7 +764,16 @@ export abstract class SqlTranslator<ED extends EntityDict> {
             let projText = '';
 
             let prefix = path.slice(2).replace(/\//g, '.');
-            Object.keys(projection2).forEach(
+            const attrs = Object.keys(projection2).filter(
+                (attr) => {
+                    if (attr.toLowerCase().startsWith(EXPRESSION_PREFIX)) {
+                        return true;
+                    }
+                    const rel = judgeRelation(this.schema, entity2, attr);
+                    return [1, 2].includes(rel as number) || typeof rel === 'string';
+                }
+            );
+            attrs.forEach(
                 (attr, idx) => {
                     if (attr.toLowerCase().startsWith(EXPRESSION_PREFIX)) {
                         const exprText = this.translateExpression(alias, projection2[attr], projectionRefAlias);
@@ -732,8 +787,7 @@ export abstract class SqlTranslator<ED extends EntityDict> {
                         else if (rel === 2) {
                             projText += translateInner(attr, projection2[attr], `${path}${attr}/`);
                         }
-                        else {
-                            assert(rel === 0 || rel === 1);
+                        else if (rel === 1) {
                             const { type } = attributes[attr];
                             if (projection2[attr] === 1) {
                                 projText += ` ${this.translateAttrProjection(type as DataType, alias, attr)} as \`${prefix}${attr}\``;
@@ -744,7 +798,7 @@ export abstract class SqlTranslator<ED extends EntityDict> {
                             }
                         }
                     }
-                    if (idx < Object.keys(projection2).length - 1) {
+                    if (idx < attrs.length - 1) {
                         projText += ',';
                     }
                 }
@@ -756,44 +810,57 @@ export abstract class SqlTranslator<ED extends EntityDict> {
         return translateInner(entity, projection, './');
     }
 
-    translateSelect<T extends keyof ED>(entity: T, selection: ED[T]['Selection'], params?: SelectParams): string {
+    private translateSelectInner<T extends keyof ED>(entity: T, selection: ED[T]['Selection'], initialNumber: number, refAlias: Record<string, string>, params?: SelectParams): {
+        stmt: string;
+        currentNumber: number;
+    } {
         const { data, filter, sorter, indexFrom, count } = selection;
-        const { from: fromText, aliasDict, projectionRefAlias, extraWhere, filterRefAlias } = this.analyzeJoin(entity, {
+        const { from: fromText, aliasDict, projectionRefAlias, extraWhere, filterRefAlias, currentNumber } = this.analyzeJoin(entity, {
             projection: data,
             filter,
             sorter,
-        });
+        }, initialNumber);
+        assert(intersection(keys(refAlias), keys(filterRefAlias)).length === 0, 'filter中的#node结点定义有重复');
+        assign(refAlias, filterRefAlias);
 
         const projText = this.translateProjection(entity, data, aliasDict, projectionRefAlias);
 
-        const filterText = this.translateFilter(entity, aliasDict, filterRefAlias, filter, extraWhere);
+        const { stmt: filterText, currentNumber: currentNumber2 } = this.translateFilter(entity, selection, aliasDict, refAlias, currentNumber, extraWhere);
 
         const sorterText = sorter && this.translateSorter(entity, sorter, aliasDict);
 
-        return this.populateSelectStmt(projText, fromText, aliasDict, filterText, sorterText, indexFrom, count, params);
+        return {
+            stmt: this.populateSelectStmt(projText, fromText, selection, aliasDict, filterText, sorterText, indexFrom, count),
+            currentNumber: currentNumber2,
+        };
     }
 
-    translateCount<T extends keyof ED>(entity: T, selection: Omit<ED[T]['Selection'], 'data' | 'sorter' | 'action'>, params?: SelectParams): string {
+    translateSelect<T extends keyof ED>(entity: T, selection: ED[T]['Selection'], params?: SelectParams): string {
+        const { stmt } = this.translateSelectInner(entity, selection, 1, {}, params);
+        return stmt;
+    }
+
+    translateCount<T extends keyof ED>(entity: T, selection: Pick<ED[T]['Selection'], 'filter'>, params?: SelectParams): string {
         const { filter } = selection;
-        const { from: fromText, aliasDict, extraWhere, filterRefAlias } = this.analyzeJoin(entity, {
+        const { from: fromText, aliasDict, extraWhere, filterRefAlias, currentNumber } = this.analyzeJoin(entity, {
             filter,
         });
 
         const projText = 'count(1)';
 
-        const filterText = this.translateFilter(entity, aliasDict, filterRefAlias, filter, extraWhere);
+        const { stmt: filterText } = this.translateFilter(entity, selection as ED[T]['Selection'], aliasDict, filterRefAlias, currentNumber, extraWhere);
 
 
-        return this.populateSelectStmt(projText, fromText, aliasDict, filterText, undefined, undefined, undefined, params);
+        return this.populateSelectStmt(projText, fromText, selection as ED[T]['Selection'], aliasDict, filterText, undefined, undefined, undefined);
     }
 
     translateRemove<T extends keyof ED>(entity: T, operation: ED[T]['Remove'], params?: SelectParams): string {
         const { filter, sorter, indexFrom, count } = operation;
-        const { aliasDict, filterRefAlias, extraWhere, from: fromText } = this.analyzeJoin(entity, { filter, sorter });
+        const { aliasDict, filterRefAlias, extraWhere, from: fromText, currentNumber } = this.analyzeJoin(entity, { filter, sorter });
 
         const alias = aliasDict['./'];
 
-        const filterText = this.translateFilter(entity, aliasDict, filterRefAlias, filter, extraWhere);
+        const { stmt: filterText } = this.translateFilter(entity, operation, aliasDict, filterRefAlias, currentNumber, extraWhere);
 
         const sorterText = sorter && sorter.length > 0 ? this.translateSorter(entity, sorter, aliasDict) : undefined;
 
@@ -803,7 +870,7 @@ export abstract class SqlTranslator<ED extends EntityDict> {
     translateUpdate<T extends keyof ED>(entity: T, operation: ED[T]['Update'], params?: any): string {
         const { attributes } = this.schema[entity];
         const { filter, sorter, indexFrom, count, data } = operation;
-        const { aliasDict, filterRefAlias, extraWhere, from: fromText } = this.analyzeJoin(entity, { filter, sorter });
+        const { aliasDict, filterRefAlias, extraWhere, from: fromText, currentNumber } = this.analyzeJoin(entity, { filter, sorter });
 
         const alias = aliasDict['./'];
 
@@ -817,7 +884,7 @@ export abstract class SqlTranslator<ED extends EntityDict> {
             updateText += `\`${alias}\`.\`${attr}\` = ${value}`;
         }
 
-        const filterText = this.translateFilter(entity, aliasDict, filterRefAlias, filter, extraWhere);
+        const { stmt: filterText } = this.translateFilter(entity, operation, aliasDict, filterRefAlias, currentNumber, extraWhere);
         const sorterText = sorter && this.translateSorter(entity, sorter, aliasDict);
 
         return this.populateUpdateStmt(updateText, fromText, aliasDict, filterText, sorterText, indexFrom, count, params);

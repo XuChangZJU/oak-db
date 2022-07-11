@@ -5,7 +5,8 @@
   "main": "src/index.ts",
   "scripts": {
     "test": "mocha",
-    "make:test:domain": "ts-node script/makeTestDomain.ts"
+    "make:test:domain": "ts-node script/makeTestDomain.ts",
+    "build": "tsc"
   },
   "dependencies": {
     "lodash": "^4.17.21",
