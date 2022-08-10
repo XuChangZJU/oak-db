@@ -190,7 +190,7 @@ export class MysqlStore<ED extends EntityDict, Cxt extends Context<ED>> extends 
                 const { data } = operation as DeduceCreateMultipleOperation<ED[T]['Schema']> | DeduceCreateSingleOperation<ED[T]['Schema']>;
                 const sql = translator.translateInsert(entity, data instanceof Array ? data : [data]);
                 await connector.exec(sql, txn);
-                if (!option?.notCollect) {
+                if (!option?.dontCollect) {
                     context.opRecords.push({
                         a: 'c',
                         d: data as any,
@@ -204,7 +204,7 @@ export class MysqlStore<ED extends EntityDict, Cxt extends Context<ED>> extends 
                 await connector.exec(sql, txn);
 
                 // todo 这里对sorter和indexfrom/count的支持不完整
-                if (!option?.notCollect) {
+                if (!option?.dontCollect) {
                     context.opRecords.push({
                         a: 'r',
                         e: entity,
@@ -219,7 +219,7 @@ export class MysqlStore<ED extends EntityDict, Cxt extends Context<ED>> extends 
                 await connector.exec(sql, txn);
 
                 // todo 这里对sorter和indexfrom/count的支持不完整
-                if (!option?.notCollect) {
+                if (!option?.dontCollect) {
                     context.opRecords.push({
                         a: 'u',
                         e: entity,

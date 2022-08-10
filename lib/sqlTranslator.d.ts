@@ -43,7 +43,7 @@ export declare abstract class SqlTranslator<ED extends EntityDict> {
     private translateProjection;
     private translateSelectInner;
     translateSelect<T extends keyof ED, OP extends SqlSelectOption>(entity: T, selection: ED[T]['Selection'], option?: OP): string;
-    translateCount<T extends keyof ED, OP extends SqlSelectOption>(entity: T, selection: Pick<ED[T]['Selection'], 'filter'>, option?: OP): string;
+    translateCount<T extends keyof ED, OP extends SqlSelectOption>(entity: T, selection: Pick<ED[T]['Selection'], 'filter' | 'count'>, option?: OP): string;
     translateRemove<T extends keyof ED, OP extends SqlOperateOption>(entity: T, operation: ED[T]['Remove'], option?: OP): string;
     translateUpdate<T extends keyof ED, OP extends SqlOperateOption>(entity: T, operation: ED[T]['Update'], option?: OP): string;
     translateDestroyEntity(entity: string, truncate?: boolean): string;
