@@ -1,7 +1,8 @@
 {
   "compilerOptions": {
     "module": "CommonJS",
-    "target": "esnext",
+    "target": "es5",
+    "declaration": true,
     "allowJs": false,
     "allowSyntheticDefaultImports": true,
     "esModuleInterop": true,

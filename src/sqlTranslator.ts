@@ -1,11 +1,13 @@
 import assert from 'assert';
 import { assign, cloneDeep, intersection, keys, set } from 'lodash';
 import { DateTime } from 'luxon';
-import { Attribute, DeduceCreateOperationData, DeduceSorterAttr, DeduceSorterItem, EntityDict, Expression, EXPRESSION_PREFIX, Index, Q_FullTextValue, Ref, RefOrExpression, StorageSchema } from "oak-domain/lib/types";
+import { Attribute, DeduceCreateOperationData, DeduceSorterAttr, DeduceSorterItem, EntityDict, Expression, EXPRESSION_PREFIX, Index, OperateOption, Q_FullTextValue, Ref, RefOrExpression, SelectOption, StorageSchema } from "oak-domain/lib/types";
 import { DataType } from "oak-domain/lib/types/schema/DataTypes";
 import { judgeRelation } from 'oak-domain/lib/store/relation';
 
-export type SelectParams = {
+export interface SqlSelectOption extends SelectOption {
+};
+export interface SqlOperateOption extends OperateOption {    
 };
 
 export abstract class SqlTranslator<ED extends EntityDict> {
@@ -112,7 +114,7 @@ export abstract class SqlTranslator<ED extends EntityDict> {
         return schema;
     }
 
-    protected abstract getDefaultSelectFilter<T extends keyof ED>(alias: string, hint: ED[T]['Selection']['hint']): string;
+    protected abstract getDefaultSelectFilter<OP extends SqlSelectOption>(alias: string, option?: OP): string;
 
     protected abstract translateAttrProjection(dataType: DataType, alias: string, attr: string): string;
 
@@ -122,7 +124,7 @@ export abstract class SqlTranslator<ED extends EntityDict> {
 
     abstract translateCreateEntity<T extends keyof ED>(entity: T, option: { replace?: boolean }): string[];
 
-    protected abstract populateSelectStmt<T extends keyof ED>(
+    protected abstract populateSelectStmt<T extends keyof ED, OP extends SqlSelectOption>(
         projectionText: string,
         fromText: string,
         selection: ED[T]['Selection'],
@@ -130,9 +132,10 @@ export abstract class SqlTranslator<ED extends EntityDict> {
         filterText: string,
         sorterText?: string,
         indexFrom?: number,
-        count?: number): string;
+        count?: number,
+        option?: OP): string;
 
-    protected abstract populateUpdateStmt(
+    protected abstract populateUpdateStmt<OP extends SqlOperateOption>(
         updateText: string,
         fromText: string,
         aliasDict: Record<string, string>,
@@ -140,9 +143,9 @@ export abstract class SqlTranslator<ED extends EntityDict> {
         sorterText?: string,
         indexFrom?: number,
         count?: number,
-        params?: any): string;
+        option?: OP): string;
 
-    protected abstract populateRemoveStmt(
+    protected abstract populateRemoveStmt<OP extends SqlOperateOption>(
         removeText: string,
         fromText: string,
         aliasDict: Record<string, string>,
@@ -150,7 +153,7 @@ export abstract class SqlTranslator<ED extends EntityDict> {
         sorterText?: string,
         indexFrom?: number,
         count?: number,
-        params?: any): string;
+        option?: OP): string;
 
     protected abstract translateExpression<T extends keyof ED>(alias: string, expression: RefOrExpression<keyof ED[T]['OpSchema']>, refDict: Record<string, string>): string;
 
@@ -592,24 +595,25 @@ export abstract class SqlTranslator<ED extends EntityDict> {
         }
     }
 
-    private translateFilter<T extends keyof ED>(
+    private translateFilter<T extends keyof ED, OP extends SqlSelectOption>(
         entity: T,
-        selection: Pick<ED[T]['Selection'], 'filter' | 'hint'>,
+        selection: Pick<ED[T]['Selection'], 'filter'>,
         aliasDict: Record<string, string>,
         filterRefAlias: Record<string, string>,
         initialNumber: number,
-        extraWhere?: string): {
+        extraWhere?: string,
+        option?: OP): {
             stmt: string;
             currentNumber: number;
         } {
         const { schema } = this;
-        const { filter, hint } = selection;
+        const { filter } = selection;
 
         let currentNumber = initialNumber;
         const translateInner = <E extends keyof ED>(entity2: E, path: string, filter2?: ED[E]['Selection']['filter'], type?: DataType | Ref): string => {
             const alias = aliasDict[path];
             const { attributes } = schema[entity2];
-            let whereText = type ? '' : this.getDefaultSelectFilter(alias, hint);
+            let whereText = type ? '' : this.getDefaultSelectFilter(alias, option);
             if (filter2) {
                 const attrs = Object.keys(filter2).filter(
                     ele => !ele.startsWith('#')
@@ -810,7 +814,7 @@ export abstract class SqlTranslator<ED extends EntityDict> {
         return translateInner(entity, projection, './');
     }
 
-    private translateSelectInner<T extends keyof ED>(entity: T, selection: ED[T]['Selection'], initialNumber: number, refAlias: Record<string, string>, params?: SelectParams): {
+    private translateSelectInner<T extends keyof ED, OP extends SqlSelectOption>(entity: T, selection: ED[T]['Selection'], initialNumber: number, refAlias: Record<string, string>, option?: OP): {
         stmt: string;
         currentNumber: number;
     } {
@@ -825,36 +829,39 @@ export abstract class SqlTranslator<ED extends EntityDict> {
 
         const projText = this.translateProjection(entity, data, aliasDict, projectionRefAlias);
 
-        const { stmt: filterText, currentNumber: currentNumber2 } = this.translateFilter(entity, selection, aliasDict, refAlias, currentNumber, extraWhere);
+        const { stmt: filterText, currentNumber: currentNumber2 } = this.translateFilter(entity, selection, aliasDict, refAlias, currentNumber, extraWhere, option);
 
         const sorterText = sorter && this.translateSorter(entity, sorter, aliasDict);
 
         return {
-            stmt: this.populateSelectStmt(projText, fromText, selection, aliasDict, filterText, sorterText, indexFrom, count),
+            stmt: this.populateSelectStmt(projText, fromText, selection, aliasDict, filterText, sorterText, indexFrom, count, option),
             currentNumber: currentNumber2,
         };
     }
 
-    translateSelect<T extends keyof ED>(entity: T, selection: ED[T]['Selection'], params?: SelectParams): string {
-        const { stmt } = this.translateSelectInner(entity, selection, 1, {}, params);
+    translateSelect<T extends keyof ED, OP extends SqlSelectOption>(entity: T, selection: ED[T]['Selection'], option?: OP): string {
+        const { stmt } = this.translateSelectInner(entity, selection, 1, {}, option);
         return stmt;
     }
 
-    translateCount<T extends keyof ED>(entity: T, selection: Pick<ED[T]['Selection'], 'filter'>, params?: SelectParams): string {
-        const { filter } = selection;
+    translateCount<T extends keyof ED, OP extends SqlSelectOption>(entity: T, selection: Pick<ED[T]['Selection'], 'filter' | 'count'>, option?: OP): string {
+        const { filter, count } = selection;
         const { from: fromText, aliasDict, extraWhere, filterRefAlias, currentNumber } = this.analyzeJoin(entity, {
             filter,
         });
 
         const projText = 'count(1)';
 
-        const { stmt: filterText } = this.translateFilter(entity, selection as ED[T]['Selection'], aliasDict, filterRefAlias, currentNumber, extraWhere);
+        const { stmt: filterText } = this.translateFilter(entity, selection as ED[T]['Selection'], aliasDict, filterRefAlias, currentNumber, extraWhere, option);
 
-
-        return this.populateSelectStmt(projText, fromText, selection as ED[T]['Selection'], aliasDict, filterText, undefined, undefined, undefined);
+        if (count) {
+            const subQuerySql = this.populateSelectStmt('1', fromText, Object.assign({}, selection, { indexFrom: 0 }) as ED[T]['Selection'], aliasDict, filterText, undefined, undefined, undefined, option);
+            return `select count(1) from (${subQuerySql})`;
+        }
+        return this.populateSelectStmt(projText, fromText, selection as ED[T]['Selection'], aliasDict, filterText, undefined, undefined, undefined, option);
     }
 
-    translateRemove<T extends keyof ED>(entity: T, operation: ED[T]['Remove'], params?: SelectParams): string {
+    translateRemove<T extends keyof ED, OP extends SqlOperateOption>(entity: T, operation: ED[T]['Remove'], option?: OP): string {
         const { filter, sorter, indexFrom, count } = operation;
         const { aliasDict, filterRefAlias, extraWhere, from: fromText, currentNumber } = this.analyzeJoin(entity, { filter, sorter });
 
@@ -864,10 +871,10 @@ export abstract class SqlTranslator<ED extends EntityDict> {
 
         const sorterText = sorter && sorter.length > 0 ? this.translateSorter(entity, sorter, aliasDict) : undefined;
 
-        return this.populateRemoveStmt(alias, fromText, aliasDict, filterText, sorterText, indexFrom, count, params);
+        return this.populateRemoveStmt(alias, fromText, aliasDict, filterText, sorterText, indexFrom, count, option);
     }
 
-    translateUpdate<T extends keyof ED>(entity: T, operation: ED[T]['Update'], params?: any): string {
+    translateUpdate<T extends keyof ED, OP extends SqlOperateOption>(entity: T, operation: ED[T]['Update'], option?: OP): string {
         const { attributes } = this.schema[entity];
         const { filter, sorter, indexFrom, count, data } = operation;
         const { aliasDict, filterRefAlias, extraWhere, from: fromText, currentNumber } = this.analyzeJoin(entity, { filter, sorter });
@@ -887,7 +894,7 @@ export abstract class SqlTranslator<ED extends EntityDict> {
         const { stmt: filterText } = this.translateFilter(entity, operation, aliasDict, filterRefAlias, currentNumber, extraWhere);
         const sorterText = sorter && this.translateSorter(entity, sorter, aliasDict);
 
-        return this.populateUpdateStmt(updateText, fromText, aliasDict, filterText, sorterText, indexFrom, count, params);
+        return this.populateUpdateStmt(updateText, fromText, aliasDict, filterText, sorterText, indexFrom, count, option);
     }
 
     translateDestroyEntity(entity: string, truncate?: boolean): string {

@@ -4,7 +4,7 @@ import { assign } from 'lodash';
 import { DateTime } from 'luxon';
 import { EntityDict, Geo, Q_FullTextValue, RefOrExpression, Ref, StorageSchema, Index, RefAttr } from "oak-domain/lib/types";
 import { DataType, DataTypeParams } from "oak-domain/lib/types/schema/DataTypes";
-import { SelectParams, SqlTranslator } from "../sqlTranslator";
+import { SqlOperateOption, SqlSelectOption, SqlTranslator } from "../sqlTranslator";
 import { isDateExpression } from 'oak-domain/lib/types/Expression';
 
 const GeoTypes = [
@@ -92,17 +92,21 @@ type IndexHint = {
     [k: string]: IndexHint;
 }
 
-export interface MySqlSelectParams extends SelectParams {
+export interface MySqlSelectOption extends SqlSelectOption {
+}
+
+export interface MysqlOperateOption extends SqlOperateOption {
+
 }
 
 export class MySqlTranslator<ED extends EntityDict> extends SqlTranslator<ED> {
-    protected getDefaultSelectFilter<T extends keyof ED>(alias: string, hint: ED[T]['Selection']['hint']): string {
-        if (hint?.includeDeleted) {
+    protected getDefaultSelectFilter(alias: string, option?: MySqlSelectOption): string {
+        if (option?.includedDeleted) {
             return '';
         }
         return ` \`${alias}\`.\`$$deleteAt$$\` is null`;
     }
-    private modifySchema() {
+    private makeUpSchema() {
         for (const entity in this.schema) {
             const { attributes, indexes } = this.schema[entity];
             const geoIndexes: Index<ED[keyof ED]['OpSchema']>[] = [];
@@ -143,7 +147,7 @@ export class MySqlTranslator<ED extends EntityDict> extends SqlTranslator<ED> {
     constructor(schema: StorageSchema<ED>) {
         super(schema);
         // MySQL为geometry属性默认创建索引
-        this.modifySchema();
+        this.makeUpSchema();
     }
     static supportedDataTypes: DataType[] = [
         // numeric types
@@ -534,7 +538,7 @@ export class MySqlTranslator<ED extends EntityDict> extends SqlTranslator<ED> {
         if (!replace) {
             return [sql];
         }
-        return [`drop ${entityType} \`${storageName || entity as string}\`;`, sql];
+        return [`drop ${entityType}  if exists \`${storageName || entity as string}\`;`, sql];
     }
 
     private translateFnName(fnName: string, argumentNumber: number): string {
@@ -735,8 +739,8 @@ export class MySqlTranslator<ED extends EntityDict> extends SqlTranslator<ED> {
         filterText: string,
         sorterText?: string,
         indexFrom?: number,
-        count?: number): string {
-        const { hint } = selection;
+        count?: number,
+        option?: MySqlSelectOption): string {
         // todo hint of use index
         let sql = `select ${projectionText} from ${fromText}`;
         if (filterText) {
@@ -749,13 +753,13 @@ export class MySqlTranslator<ED extends EntityDict> extends SqlTranslator<ED> {
             assert (typeof count === 'number');
             sql += ` limit ${indexFrom}, ${count}`;
         }
-        if (hint?.mysql?.forUpdate) {
+        if (option?.forUpdate) {
             sql += ' for update';
         }
 
         return sql;
     }
-    protected populateUpdateStmt(updateText: string, fromText: string, aliasDict: Record<string, string>, filterText: string, sorterText?: string, indexFrom?: number, count?: number, params?: MySqlSelectParams): string {
+    protected populateUpdateStmt(updateText: string, fromText: string, aliasDict: Record<string, string>, filterText: string, sorterText?: string, indexFrom?: number, count?: number, option?: MysqlOperateOption): string {
         // todo using index
         const alias = aliasDict['./'];
         const now = DateTime.now().toFormat('yyyy-LL-dd HH:mm:ss');
@@ -773,7 +777,7 @@ export class MySqlTranslator<ED extends EntityDict> extends SqlTranslator<ED> {
 
         return sql;
     }
-    protected populateRemoveStmt(removeText: string, fromText: string, aliasDict: Record<string, string>, filterText: string, sorterText?: string, indexFrom?: number, count?: number, params?: MySqlSelectParams): string {
+    protected populateRemoveStmt(removeText: string, fromText: string, aliasDict: Record<string, string>, filterText: string, sorterText?: string, indexFrom?: number, count?: number, option?: MysqlOperateOption): string {
         // todo using index
         const alias = aliasDict['./'];
         const now = DateTime.now().toFormat('yyyy-LL-dd HH:mm:ss');

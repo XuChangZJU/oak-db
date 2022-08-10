@@ -1,8 +1,8 @@
-import { EntityDict, Context, DeduceCreateSingleOperation, DeduceRemoveOperation, DeduceUpdateOperation, OperateParams, OperationResult, SelectionResult, TxnOption, SelectRowShape, StorageSchema, DeduceCreateMultipleOperation } from 'oak-domain/lib/types';
+import { EntityDict, Context, DeduceCreateSingleOperation, DeduceRemoveOperation, DeduceUpdateOperation, OperateOption, OperationResult, SelectionResult, TxnOption, SelectRowShape, StorageSchema, DeduceCreateMultipleOperation, SelectOption } from 'oak-domain/lib/types';
 import { CascadeStore } from 'oak-domain/lib/store/CascadeStore';
 import { MySQLConfiguration } from './types/Configuration';
 import { MySqlConnector } from './connector';
-import { MySqlTranslator, MySqlSelectParams } from './translator';
+import { MySqlTranslator, MySqlSelectOption, MysqlOperateOption } from './translator';
 import { assign } from 'lodash';
 import assert from 'assert';
 import { judgeRelation } from 'oak-domain/lib/store/relation';
@@ -168,9 +168,9 @@ export class MysqlStore<ED extends EntityDict, Cxt extends Context<ED>> extends 
         entity: T,
         selection: S,
         context: Cxt,
-        params?: OperateParams & MySqlSelectParams
+        option?: MySqlSelectOption
     ): Promise<SelectRowShape<ED[T]['Schema'], S['data']>[]> {
-        const sql = this.translator.translateSelect(entity, selection, params);
+        const sql = this.translator.translateSelect(entity, selection, option);
         const result = await this.connector.exec(sql, context.getCurrentTxnId());
 
         return this.formResult(entity, result);
@@ -179,7 +179,7 @@ export class MysqlStore<ED extends EntityDict, Cxt extends Context<ED>> extends 
         entity: T,
         operation: DeduceCreateMultipleOperation<ED[T]['Schema']> | DeduceCreateSingleOperation<ED[T]['Schema']> | DeduceUpdateOperation<ED[T]['Schema']> | DeduceRemoveOperation<ED[T]['Schema']>,
         context: Cxt,
-        params?: OperateParams & MySqlSelectParams
+        option?: MysqlOperateOption
     ): Promise<number> {
         const { translator, connector } = this;
         const { action } = operation;
@@ -190,55 +190,61 @@ export class MysqlStore<ED extends EntityDict, Cxt extends Context<ED>> extends 
                 const { data } = operation as DeduceCreateMultipleOperation<ED[T]['Schema']> | DeduceCreateSingleOperation<ED[T]['Schema']>;
                 const sql = translator.translateInsert(entity, data instanceof Array ? data : [data]);
                 await connector.exec(sql, txn);
-                context.opRecords.push({
-                    a: 'c',
-                    d: data as any,
-                    e: entity,
-                });
+                if (!option?.notCollect) {
+                    context.opRecords.push({
+                        a: 'c',
+                        d: data as any,
+                        e: entity,
+                    });
+                }
                 return data instanceof Array ? data.length : 1;
             }
             case 'remove': {
-                const sql = translator.translateRemove(entity, operation as ED[T]['Remove'], params);
+                const sql = translator.translateRemove(entity, operation as ED[T]['Remove'], option);
                 await connector.exec(sql, txn);
 
                 // todo 这里对sorter和indexfrom/count的支持不完整
-                context.opRecords.push({
-                    a: 'r',
-                    e: entity,
-                    f: (operation as ED[T]['Remove']).filter,
-                });
+                if (!option?.notCollect) {
+                    context.opRecords.push({
+                        a: 'r',
+                        e: entity,
+                        f: (operation as ED[T]['Remove']).filter,
+                    });
+                }
                 return 1;
             }
             default: {
                 assert(!['select', 'download', 'stat'].includes(action));
-                const sql = translator.translateUpdate(entity, operation as ED[T]['Update'], params);
+                const sql = translator.translateUpdate(entity, operation as ED[T]['Update'], option);
                 await connector.exec(sql, txn);
 
                 // todo 这里对sorter和indexfrom/count的支持不完整
-                context.opRecords.push({
-                    a: 'u',
-                    e: entity,
-                    d: (operation as ED[T]['Update']).data,
-                    f: (operation as ED[T]['Update']).filter,
-                })
+                if (!option?.notCollect) {
+                    context.opRecords.push({
+                        a: 'u',
+                        e: entity,
+                        d: (operation as ED[T]['Update']).data,
+                        f: (operation as ED[T]['Update']).filter,
+                    });
+                }
                 return 1;
             }
         }
     }
-    async operate<T extends keyof ED>(entity: T, operation: ED[T]['Operation'], context: Cxt, params?: OperateParams): Promise<OperationResult<ED>> {
+    async operate<T extends keyof ED>(entity: T, operation: ED[T]['Operation'], context: Cxt, params?: OperateOption): Promise<OperationResult<ED>> {
         const { action } = operation;
         assert(!['select', 'download', 'stat'].includes(action), '现在不支持使用select operation');
-        return await this.cascadeUpdate(entity, operation as any, context, params);   
+        return await this.cascadeUpdate(entity, operation as any, context, params);
     }
-    async select<T extends keyof ED, S extends ED[T]['Selection']>(entity: T, selection: S, context: Cxt, params?: Object): Promise<SelectionResult<ED[T]['Schema'], S['data']>> {
-        const result = await this.cascadeSelect(entity, selection, context, params);
+    async select<T extends keyof ED, S extends ED[T]['Selection']>(entity: T, selection: S, context: Cxt, option?: SelectOption): Promise<SelectionResult<ED[T]['Schema'], S['data']>> {
+        const result = await this.cascadeSelect(entity, selection, context, option);
         return {
             result,
         };
     }
-    async count<T extends keyof ED>(entity: T, selection: Pick<ED[T]['Selection'], 'filter'>, context: Cxt, params?: Object): Promise<number> {
-        const sql = this.translator.translateCount(entity, selection, params);
-        
+    async count<T extends keyof ED>(entity: T, selection: Pick<ED[T]['Selection'], 'filter' | 'count'>, context: Cxt, option?: SelectOption): Promise<number> {
+        const sql = this.translator.translateCount(entity, selection, option);
+
         const result = await this.connector.exec(sql, context.getCurrentTxnId());
         return result.count as number;
     }
