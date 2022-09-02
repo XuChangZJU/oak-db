@@ -1,4 +1,5 @@
 import { EntityDict, Context, DeduceCreateSingleOperation, DeduceRemoveOperation, DeduceUpdateOperation, OperateOption, OperationResult, SelectionResult, TxnOption, SelectRowShape, StorageSchema, DeduceCreateMultipleOperation, SelectOption } from 'oak-domain/lib/types';
+import { EntityDict as BaseEntityDict } from 'oak-domain/lib/base-app-domain';
 import { CascadeStore } from 'oak-domain/lib/store/CascadeStore';
 import { MySQLConfiguration } from './types/Configuration';
 import { MySqlConnector } from './connector';
@@ -24,7 +25,7 @@ function convertGeoTextToObject(geoText: string): object {
     }
 }
 
-export class MysqlStore<ED extends EntityDict, Cxt extends Context<ED>> extends CascadeStore<ED, Cxt> {
+export class MysqlStore<ED extends EntityDict & BaseEntityDict, Cxt extends Context<ED>> extends CascadeStore<ED, Cxt> {
     connector: MySqlConnector;
     translator: MySqlTranslator<ED>;
     constructor(storageSchema: StorageSchema<ED>, configuration: MySQLConfiguration) {
@@ -231,18 +232,18 @@ export class MysqlStore<ED extends EntityDict, Cxt extends Context<ED>> extends 
             }
         }
     }
-    async operate<T extends keyof ED>(entity: T, operation: ED[T]['Operation'], context: Cxt, params?: OperateOption): Promise<OperationResult<ED>> {
+    async operate<T extends keyof ED>(entity: T, operation: ED[T]['Operation'], context: Cxt, option: OperateOption): Promise<OperationResult<ED>> {
         const { action } = operation;
         assert(!['select', 'download', 'stat'].includes(action), '现在不支持使用select operation');
-        return await this.cascadeUpdate(entity, operation as any, context, params);
+        return await this.cascadeUpdate(entity, operation as any, context, option);
     }
-    async select<T extends keyof ED, S extends ED[T]['Selection']>(entity: T, selection: S, context: Cxt, option?: SelectOption): Promise<SelectionResult<ED[T]['Schema'], S['data']>> {
+    async select<T extends keyof ED, S extends ED[T]['Selection']>(entity: T, selection: S, context: Cxt, option: SelectOption): Promise<SelectionResult<ED[T]['Schema'], S['data']>> {
         const result = await this.cascadeSelect(entity, selection, context, option);
         return {
             result,
         };
     }
-    async count<T extends keyof ED>(entity: T, selection: Pick<ED[T]['Selection'], 'filter' | 'count'>, context: Cxt, option?: SelectOption): Promise<number> {
+    async count<T extends keyof ED>(entity: T, selection: Pick<ED[T]['Selection'], 'filter' | 'count'>, context: Cxt, option: SelectOption): Promise<number> {
         const sql = this.translator.translateCount(entity, selection, option);
 
         const result = await this.connector.exec(sql, context.getCurrentTxnId());
