@@ -298,6 +298,19 @@ export class MySqlTranslator<ED extends EntityDict> extends SqlTranslator<ED> {
 
     maxAliasLength = 63;
     private populateDataTypeDef(type: DataType | Ref, params?: DataTypeParams): string{
+        if (['date', 'datetime', 'time'].includes(type)) {
+            return 'bigint ';
+        }
+        if (['object', 'array'].includes(type)) {
+            return 'text ';
+        }
+        if (['image', 'function'].includes(type)) {
+            return 'text ';
+        }
+        if (type === 'ref') {
+            return 'char(36)';
+        }
+
         if (MySqlTranslator.withLengthDataTypes.includes(type as DataType)) {
             if (params) {
                 const { length } = params;
@@ -348,19 +361,6 @@ export class MySqlTranslator<ED extends EntityDict> extends SqlTranslator<ED> {
             }
         }
 
-        if (['date'].includes(type)) {
-            return 'datetime';
-        }
-        if (['object', 'array'].includes(type)) {
-            return 'text ';
-        }
-        if (['image', 'function'].includes(type)) {
-            return 'text ';
-        }
-        if (type === 'ref') {
-            return 'char(36)';
-        }
-
         return `${type} `;
     }
 
@@ -376,21 +376,23 @@ export class MySqlTranslator<ED extends EntityDict> extends SqlTranslator<ED> {
     }
 
     protected translateAttrValue(dataType: DataType | Ref, value: any): string {
-        if (value === null) {
+        if (value === null || value === undefined) {
             return 'null';
         }
         switch (dataType) {
             case 'geometry': {
                 return transformGeoData(value);
             }
+            case 'datetime':
+            case 'time':
             case 'date': {
                 if (value instanceof Date) {
-                    return DateTime.fromJSDate(value).toFormat('yyyy-LL-dd HH:mm:ss');
+                    return `${value.valueOf()}`;
                 }
                 else if (typeof value === 'number') {
-                    return DateTime.fromMillis(value).toFormat('yyyy-LL-dd HH:mm:ss');
+                    return `${value}`;
                 }
-                return value as string;
+                return `'${(new Date(value)).valueOf()}'`;
             }
             case 'object':
             case 'array': {

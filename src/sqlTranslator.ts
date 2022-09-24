@@ -29,21 +29,21 @@ export abstract class SqlTranslator<ED extends EntityDict> {
                     },
                 } as Attribute,
                 $$createAt$$: {
-                    type: 'date',
+                    type: 'datetime',
                     notNull: true,
                 } as Attribute,
                 $$updateAt$$: {
-                    type: 'date',
+                    type: 'datetime',
                     notNull: true,
                 } as Attribute,
                 $$deleteAt$$: {
-                    type: 'date',
+                    type: 'datetime',
                 } as Attribute,
                 $$triggerData$$: {
                     type: 'object',
                 } as Attribute,
                 $$triggerTimestamp$$: {
-                    type: 'date',
+                    type: 'datetime',
                 } as Attribute,
             });
 
@@ -180,9 +180,8 @@ export abstract class SqlTranslator<ED extends EntityDict> {
             }
         );
 
-        sql += ', `$$createAt$$`, `$$updateAt$$`) values ';
+        sql += ') values ';
 
-        const now = DateTime.now().toFormat('yyyy-LL-dd HH:mm:ss');
         data.forEach(
             (d, dataIndex) => {
                 sql += '(';
@@ -197,9 +196,11 @@ export abstract class SqlTranslator<ED extends EntityDict> {
                         }
                     }
                 );
-                sql += `, '${now}', '${now}')`;
                 if (dataIndex < data.length - 1) {
-                    sql += ',';
+                    sql += '),';
+                }
+                else {
+                    sql += ')'
                 }
             }
         );
@@ -671,7 +672,7 @@ export abstract class SqlTranslator<ED extends EntityDict> {
                             currentNumber = cn2;
                         }
                         else {
-                            const rel = judgeRelation(this.schema, entity, attr);
+                            const rel = judgeRelation(this.schema, entity2, attr);
                             if (rel === 2) {
                                 whereText += ` ${translateInner(attr, `${path}${attr}/`, filter2[attr])}`;
                             }
