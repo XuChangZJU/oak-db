@@ -168,7 +168,11 @@ export abstract class SqlTranslator<ED extends EntityDict> {
 
         let sql = `insert into \`${storageName as string}\`(`;
 
-        const attrs = Object.keys(data[0]).filter(
+        /**
+         * 这里的attrs要用所有行的union集合
+         */
+        const dataFull = data.reduce((prev, cur) => Object.assign({}, cur, prev), {});
+        const attrs = Object.keys(dataFull).filter(
             ele => attributes.hasOwnProperty(ele)
         );
         attrs.forEach(
@@ -851,13 +855,13 @@ export abstract class SqlTranslator<ED extends EntityDict> {
             filter,
         });
 
-        const projText = 'count(1)';
+        const projText = 'count(1) cnt';
 
         const { stmt: filterText } = this.translateFilter(entity, selection as ED[T]['Selection'], aliasDict, filterRefAlias, currentNumber, extraWhere, option);
 
         if (count) {
-            const subQuerySql = this.populateSelectStmt('1', fromText, Object.assign({}, selection, { indexFrom: 0 }) as ED[T]['Selection'], aliasDict, filterText, undefined, undefined, undefined, option);
-            return `select count(1) from (${subQuerySql})`;
+            const subQuerySql = this.populateSelectStmt('1', fromText, Object.assign({}, selection, { indexFrom: 0, count }) as ED[T]['Selection'], aliasDict, filterText, undefined, undefined, undefined, option);
+            return `select count(1) cnt from (${subQuerySql}) __tmp`;
         }
         return this.populateSelectStmt(projText, fromText, selection as ED[T]['Selection'], aliasDict, filterText, undefined, undefined, undefined, option);
     }

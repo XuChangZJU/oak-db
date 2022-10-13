@@ -247,7 +247,7 @@ export class MysqlStore<ED extends EntityDict & BaseEntityDict, Cxt extends Cont
         const sql = this.translator.translateCount(entity, selection, option);
 
         const result = await this.connector.exec(sql, context.getCurrentTxnId());
-        return result.count as number;
+        return result[0].cnt as number;
     }
     async begin(option?: TxnOption): Promise<string> {
         const txn = await this.connector.startTransaction(option);

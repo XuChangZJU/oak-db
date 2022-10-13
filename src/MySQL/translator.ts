@@ -765,7 +765,8 @@ export class MySqlTranslator<ED extends EntityDict> extends SqlTranslator<ED> {
         // todo using index
         const alias = aliasDict['./'];
         const now = DateTime.now().toFormat('yyyy-LL-dd HH:mm:ss');
-        let sql = `update ${fromText} set ${updateText ? `${updateText},` : ''} \`${alias}\`.\`$$updateAt$$\` = '${now}'`;
+        assert(updateText);
+        let sql = `update ${fromText} set ${updateText}`;
         if (filterText) {
             sql += ` where ${filterText}`;
         }
