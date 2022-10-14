@@ -268,6 +268,14 @@ export abstract class SqlTranslator<ED extends EntityDict> {
                             })
                         );
                     }
+                    else if (['$not'].includes(op)) {
+                        analyzeFilterNode({
+                            node: node![op],
+                            path,
+                            entityName,
+                            alias,
+                        })
+                    }
                     else {
                         const rel = judgeRelation(this.schema, entityName, op);
                         if (typeof rel === 'string') {
@@ -307,7 +315,7 @@ export abstract class SqlTranslator<ED extends EntityDict> {
                             analyzeFilterNode({
                                 node: node![op],
                                 path: pathAttr,
-                                entityName: rel,
+                                entityName: op,
                                 alias: alias2,
                             });
                         }
