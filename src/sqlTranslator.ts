@@ -306,8 +306,7 @@ export abstract class SqlTranslator<ED extends EntityDict> {
                                 assign(aliasDict, {
                                     [pathAttr]: alias2,
                                 });
-                                from += ` left join \`${this.getStorageName(op)}\` \`${alias2}\` on \`${alias}\`.\`entityId\` = \`${alias2}\`.\`id\``;
-                                extraWhere += `\`${alias}\`.\`entity\` = '${op}'`;
+                                from += ` left join \`${this.getStorageName(op)}\` \`${alias2}\` on \`${alias}\`.\`entityId\` = \`${alias2}\`.\`id\` and \`${alias}\`.\`entity\` = '${op}'`;
                             }
                             else {
                                 alias2 = aliasDict[pathAttr];
@@ -379,8 +378,7 @@ export abstract class SqlTranslator<ED extends EntityDict> {
                     assign(aliasDict, {
                         [pathAttr]: alias2,
                     });
-                    from += ` left join \`${this.getStorageName(attr)}\` \`${alias2}\` on \`${alias}\`.\`entityId\` = \`${alias2}\`.\`id\``;
-                    extraWhere += `\`${alias}\`.\`entity\` = '${attr}'`;
+                    from += ` left join \`${this.getStorageName(attr)}\` \`${alias2}\` on \`${alias}\`.\`entityId\` = \`${alias2}\`.\`id\` and \`${alias}\`.\`entity\` = '${attr}'`;
                 }
                 else {
                     alias2 = aliasDict[pathAttr];
@@ -451,7 +449,7 @@ export abstract class SqlTranslator<ED extends EntityDict> {
                             assign(aliasDict, {
                                 [pathAttr]: alias2,
                             });
-                            from += ` left join \`${this.getStorageName(attr)}\` \`${alias2}\` on \`${alias}\`.\`entityId\` = \`${alias2}\`.\`id\``;
+                            from += ` left join \`${this.getStorageName(attr)}\` \`${alias2}\` on \`${alias}\`.\`entityId\` = \`${alias2}\`.\`id\` and \`${alias}\`.\`entity\` = '${attr}'`;
                         }
                         else {
                             alias2 = aliasDict[pathAttr];
@@ -463,7 +461,6 @@ export abstract class SqlTranslator<ED extends EntityDict> {
                             entityName: attr,
                             alias: alias2,
                         });
-                        extraWhere += `\`${alias}\`.\`entity\` = '${attr}'`;
                     }
                 }
             );

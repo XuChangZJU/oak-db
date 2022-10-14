@@ -2,7 +2,7 @@
 	"name": "oak-db",
 	"version": "1.0.5",
 	"description": "oak-db",
-	"main": "lib/index.js",
+	"main": "src/index",
 	"author": {
 		"name": "XuChang"
 	},

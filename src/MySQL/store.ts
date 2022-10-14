@@ -48,12 +48,23 @@ export class MysqlStore<ED extends EntityDict & BaseEntityDict, Cxt extends Cont
                 if (i !== -1) {
                     const attrHead = attr.slice(0, i);
                     const attrTail = attr.slice(i + 1);
-                    if (!r[attrHead]) {
-                        r[attrHead] = {};
-                    }
                     const rel = judgeRelation(schema, entity2, attrHead);
                     assert(rel === 2 || typeof rel === 'string');
-                    resolveAttribute(typeof rel === 'string' ? rel : attrHead, r[attrHead], attrTail, value);
+                    if (rel === 2) {
+                        if (r.entity === attrHead) {
+                            if (!r[attrHead]) {
+                                r[attrHead] = {};
+                            }
+                            resolveAttribute(attrHead, r[attrHead], attrTail, value);
+                        }
+                    }
+                    else {
+                        assert(typeof rel === 'string');
+                        if (!r[attrHead]) {
+                            r[attrHead] = {};
+                        }
+                        resolveAttribute(rel, r[attrHead], attrTail, value);
+                    }
                 }
                 else if (attributes[attr]) {
                     const { type } = attributes[attr];
