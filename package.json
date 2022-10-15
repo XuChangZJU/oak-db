@@ -1,8 +1,8 @@
 {
 	"name": "oak-db",
-	"version": "1.0.7",
+	"version": "1.0.8",
 	"description": "oak-db",
-	"main": "lib/index",
+	"main": "src/index",
 	"author": {
 		"name": "XuChang"
 	},
@@ -18,7 +18,7 @@
 		"lodash": "^4.17.21",
 		"mysql": "^2.18.1",
 		"mysql2": "^2.3.3",
-		"oak-domain": "^1.1.13",
+		"oak-domain": "file:../oak-domain",
 		"uuid": "^8.3.2"
 	},
 	"license": "ISC",
