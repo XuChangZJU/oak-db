@@ -1,6 +1,5 @@
 import assert from 'assert';
 import { assign, cloneDeep, intersection, keys, set } from 'lodash';
-import { DateTime } from 'luxon';
 import { Attribute, DeduceCreateOperationData, DeduceSorterAttr, DeduceSorterItem, EntityDict, Expression, EXPRESSION_PREFIX, Index, OperateOption, Q_FullTextValue, Ref, RefOrExpression, SelectOption, StorageSchema } from "oak-domain/lib/types";
 import { DataType } from "oak-domain/lib/types/schema/DataTypes";
 import { judgeRelation } from 'oak-domain/lib/store/relation';
@@ -878,7 +877,7 @@ export abstract class SqlTranslator<ED extends EntityDict> {
 
         const alias = aliasDict['./'];
 
-        const { stmt: filterText } = this.translateFilter(entity, operation, aliasDict, filterRefAlias, currentNumber, extraWhere);
+        const { stmt: filterText } = this.translateFilter(entity, operation, aliasDict, filterRefAlias, currentNumber, extraWhere, { includedDeleted: true });
 
         // const sorterText = sorter && sorter.length > 0 ? this.translateSorter(entity, sorter, aliasDict) : undefined;
 

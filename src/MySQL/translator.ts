@@ -1,7 +1,6 @@
 import assert from 'assert';
 import { format } from 'util';
 import { assign } from 'lodash';
-import { DateTime } from 'luxon';
 import { EntityDict, Geo, Q_FullTextValue, RefOrExpression, Ref, StorageSchema, Index, RefAttr } from "oak-domain/lib/types";
 import { DataType, DataTypeParams } from "oak-domain/lib/types/schema/DataTypes";
 import { SqlOperateOption, SqlSelectOption, SqlTranslator } from "../sqlTranslator";
@@ -670,14 +669,14 @@ export class MySqlTranslator<ED extends EntityDict> extends SqlTranslator<ED> {
     protected translateExpression<T extends keyof ED>(alias: string, expression: RefOrExpression<keyof ED[T]["OpSchema"]>, refDict: Record<string, string>): string {
         const translateConstant = (constant: number | string | Date): string => {
             if (typeof constant === 'string') {
-                return `'${constant}'`;
+                return ` ${new Date(constant).valueOf()}`;
             }
             else if (constant instanceof Date) {
-                return `'${DateTime.fromJSDate(constant).toFormat('yyyy-LL-dd HH:mm:ss')}'`;
+                return ` ${constant.valueOf()}`;
             }
             else {
                 assert(typeof constant === 'number');
-                return `${constant}`;
+                return ` ${constant}`;
             }
         };
         const translateInner = (expr: any): string => {
@@ -763,8 +762,6 @@ export class MySqlTranslator<ED extends EntityDict> extends SqlTranslator<ED> {
     }
     protected populateUpdateStmt(updateText: string, fromText: string, aliasDict: Record<string, string>, filterText: string, sorterText?: string, indexFrom?: number, count?: number, option?: MysqlOperateOption): string {
         // todo using index
-        const alias = aliasDict['./'];
-        const now = DateTime.now().toFormat('yyyy-LL-dd HH:mm:ss');
         assert(updateText);
         let sql = `update ${fromText} set ${updateText}`;
         if (filterText) {
@@ -783,7 +780,7 @@ export class MySqlTranslator<ED extends EntityDict> extends SqlTranslator<ED> {
     protected populateRemoveStmt(removeText: string, fromText: string, aliasDict: Record<string, string>, filterText: string, sorterText?: string, indexFrom?: number, count?: number, option?: MysqlOperateOption): string {
         // todo using index
         const alias = aliasDict['./'];
-        const now = DateTime.now().toFormat('yyyy-LL-dd HH:mm:ss');
+        const now = Date.now();
         let sql = `update ${fromText} set \`${alias}\`.\`$$deleteAt$$\` = '${now}'`;
         if (filterText) {
             sql += ` where ${filterText}`;
