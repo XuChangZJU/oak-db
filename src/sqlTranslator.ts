@@ -873,20 +873,22 @@ export abstract class SqlTranslator<ED extends EntityDict> {
 
     translateRemove<T extends keyof ED, OP extends SqlOperateOption>(entity: T, operation: ED[T]['Remove'], option?: OP): string {
         const { filter, sorter, indexFrom, count } = operation;
+        assert(!sorter, '当前remove不支持sorter行为');
         const { aliasDict, filterRefAlias, extraWhere, from: fromText, currentNumber } = this.analyzeJoin(entity, { filter, sorter });
 
         const alias = aliasDict['./'];
 
         const { stmt: filterText } = this.translateFilter(entity, operation, aliasDict, filterRefAlias, currentNumber, extraWhere);
 
-        const sorterText = sorter && sorter.length > 0 ? this.translateSorter(entity, sorter, aliasDict) : undefined;
+        // const sorterText = sorter && sorter.length > 0 ? this.translateSorter(entity, sorter, aliasDict) : undefined;
 
-        return this.populateRemoveStmt(alias, fromText, aliasDict, filterText, sorterText, indexFrom, count, option);
+        return this.populateRemoveStmt(alias, fromText, aliasDict, filterText, /* sorterText */ undefined, indexFrom, count, option);
     }
 
     translateUpdate<T extends keyof ED, OP extends SqlOperateOption>(entity: T, operation: ED[T]['Update'], option?: OP): string {
         const { attributes } = this.schema[entity];
         const { filter, sorter, indexFrom, count, data } = operation;
+        assert(!sorter, '当前update不支持sorter行为');
         const { aliasDict, filterRefAlias, extraWhere, from: fromText, currentNumber } = this.analyzeJoin(entity, { filter, sorter });
 
         const alias = aliasDict['./'];
@@ -902,9 +904,9 @@ export abstract class SqlTranslator<ED extends EntityDict> {
         }
 
         const { stmt: filterText } = this.translateFilter(entity, operation, aliasDict, filterRefAlias, currentNumber, extraWhere);
-        const sorterText = sorter && this.translateSorter(entity, sorter, aliasDict);
+        // const sorterText = sorter && this.translateSorter(entity, sorter, aliasDict);
 
-        return this.populateUpdateStmt(updateText, fromText, aliasDict, filterText, sorterText, indexFrom, count, option);
+        return this.populateUpdateStmt(updateText, fromText, aliasDict, filterText, /* sorterText */ undefined, indexFrom, count, option);
     }
 
     translateDestroyEntity(entity: string, truncate?: boolean): string {

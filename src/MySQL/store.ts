@@ -60,10 +60,12 @@ export class MysqlStore<ED extends EntityDict & BaseEntityDict, Cxt extends Cont
                     }
                     else {
                         assert(typeof rel === 'string');
-                        if (!r[attrHead]) {
-                            r[attrHead] = {};
+                        if (typeof r[`${attrHead}Id`] === 'string') {
+                            if (!r[attrHead]) {
+                                r[attrHead] = {};
+                            }
+                            resolveAttribute(rel, r[attrHead], attrTail, value);
                         }
-                        resolveAttribute(rel, r[attrHead], attrTail, value);
                     }
                 }
                 else if (attributes[attr]) {
