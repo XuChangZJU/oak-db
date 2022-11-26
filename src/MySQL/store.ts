@@ -1,4 +1,5 @@
-import { EntityDict, Context, DeduceCreateSingleOperation, DeduceRemoveOperation, DeduceUpdateOperation, OperateOption, OperationResult, SelectionResult, TxnOption, SelectRowShape, StorageSchema, DeduceCreateMultipleOperation, SelectOption } from 'oak-domain/lib/types';
+import { EntityDict, DeduceCreateSingleOperation, DeduceRemoveOperation, DeduceUpdateOperation, OperateOption,
+    OperationResult, TxnOption, StorageSchema, DeduceCreateMultipleOperation, SelectOption } from 'oak-domain/lib/types';
 import { EntityDict as BaseEntityDict } from 'oak-domain/lib/base-app-domain';
 import { CascadeStore } from 'oak-domain/lib/store/CascadeStore';
 import { MySQLConfiguration } from './types/Configuration';
@@ -7,6 +8,8 @@ import { MySqlTranslator, MySqlSelectOption, MysqlOperateOption } from './transl
 import { assign } from 'lodash';
 import assert from 'assert';
 import { judgeRelation } from 'oak-domain/lib/store/relation';
+import { AsyncContext, AsyncRowStore } from 'oak-domain/lib/store/AsyncRowStore';
+import { SyncContext } from 'oak-domain/lib/store/SyncRowStore';
 
 
 function convertGeoTextToObject(geoText: string): object {
@@ -25,7 +28,13 @@ function convertGeoTextToObject(geoText: string): object {
     }
 }
 
-export class MysqlStore<ED extends EntityDict & BaseEntityDict, Cxt extends Context<ED>> extends CascadeStore<ED, Cxt> {
+export class MysqlStore<ED extends EntityDict & BaseEntityDict, Cxt extends AsyncContext<ED>> extends CascadeStore<ED> implements AsyncRowStore<ED, Cxt>{
+    protected selectAbjointRow<T extends keyof ED, OP extends SelectOption>(entity: T, selection: ED[T]['Selection'], context: SyncContext<ED>, option: OP): Partial<ED[T]['Schema']>[] {
+        throw new Error('MySQL store不支持同步取数据，不应该跑到这儿');
+    }
+    protected updateAbjointRow<T extends keyof ED, OP extends OperateOption>(entity: T, operation: ED[T]['Operation'], context: SyncContext<ED>, option: OP): number {
+        throw new Error('MySQL store不支持同步更新数据，不应该跑到这儿');
+    }
     connector: MySqlConnector;
     translator: MySqlTranslator<ED>;
     constructor(storageSchema: StorageSchema<ED>, configuration: MySQLConfiguration) {
@@ -178,21 +187,21 @@ export class MysqlStore<ED extends EntityDict & BaseEntityDict, Cxt extends Cont
         }
         return formSingleRow(result);
     }
-    protected async selectAbjointRow<T extends keyof ED, S extends ED[T]['Selection']>(
+    protected async selectAbjointRowAsync<T extends keyof ED>(
         entity: T,
-        selection: S,
-        context: Cxt,
+        selection: ED[T]['Selection'],
+        context: AsyncContext<ED>,
         option?: MySqlSelectOption
-    ): Promise<SelectRowShape<ED[T]['Schema'], S['data']>[]> {
+    ): Promise<Partial<ED[T]['Schema']>[]> {
         const sql = this.translator.translateSelect(entity, selection, option);
         const result = await this.connector.exec(sql, context.getCurrentTxnId());
 
         return this.formResult(entity, result);
     }
-    protected async updateAbjointRow<T extends keyof ED>(
+    protected async updateAbjointRowAsync<T extends keyof ED>(
         entity: T,
         operation: DeduceCreateMultipleOperation<ED[T]['Schema']> | DeduceCreateSingleOperation<ED[T]['Schema']> | DeduceUpdateOperation<ED[T]['Schema']> | DeduceRemoveOperation<ED[T]['Schema']>,
-        context: Cxt,
+        context: AsyncContext<ED>,
         option?: MysqlOperateOption
     ): Promise<number> {
         const { translator, connector } = this;
@@ -248,13 +257,11 @@ export class MysqlStore<ED extends EntityDict & BaseEntityDict, Cxt extends Cont
     async operate<T extends keyof ED>(entity: T, operation: ED[T]['Operation'], context: Cxt, option: OperateOption): Promise<OperationResult<ED>> {
         const { action } = operation;
         assert(!['select', 'download', 'stat'].includes(action), '现在不支持使用select operation');
-        return await this.cascadeUpdate(entity, operation as any, context, option);
+        return await this.cascadeUpdateAsync(entity, operation as any, context, option);
     }
-    async select<T extends keyof ED, S extends ED[T]['Selection']>(entity: T, selection: S, context: Cxt, option: SelectOption): Promise<SelectionResult<ED[T]['Schema'], S['data']>> {
-        const result = await this.cascadeSelect(entity, selection, context, option);
-        return {
-            result,
-        };
+    async select<T extends keyof ED>(entity: T, selection: ED[T]['Selection'], context: Cxt, option: SelectOption): Promise<Partial<ED[T]['Schema']>[]> {
+        const result = await this.cascadeSelectAsync(entity, selection, context, option);
+        return result;
     }
     async count<T extends keyof ED>(entity: T, selection: Pick<ED[T]['Selection'], 'filter' | 'count'>, context: Cxt, option: SelectOption): Promise<number> {
         const sql = this.translator.translateCount(entity, selection, option);

@@ -27,6 +27,10 @@ export abstract class SqlTranslator<ED extends EntityDict> {
                         length: 36,
                     },
                 } as Attribute,
+                $$seq$$: {
+                    type: 'sequence',
+                    sequenceStart: 10000,
+                } as Attribute,
                 $$createAt$$: {
                     type: 'datetime',
                     notNull: true,

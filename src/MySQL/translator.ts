@@ -297,7 +297,7 @@ export class MySqlTranslator<ED extends EntityDict> extends SqlTranslator<ED> {
 
     maxAliasLength = 63;
     private populateDataTypeDef(type: DataType | Ref, params?: DataTypeParams): string{
-        if (['date', 'datetime', 'time'].includes(type)) {
+        if (['date', 'datetime', 'time', 'sequence'].includes(type)) {
             return 'bigint ';
         }
         if (['object', 'array'].includes(type)) {
@@ -305,7 +305,7 @@ export class MySqlTranslator<ED extends EntityDict> extends SqlTranslator<ED> {
         }
         if (['image', 'function'].includes(type)) {
             return 'text ';
-        }
+        }        
         if (type === 'ref') {
             return 'char(36)';
         }
@@ -431,6 +431,7 @@ export class MySqlTranslator<ED extends EntityDict> extends SqlTranslator<ED> {
         const entityDef = schema[entity];
         const { storageName, attributes, indexes, view } = entityDef;
 
+        let hasSequence: boolean | number = false;
         // todo view暂还不支持
         const entityType = view ? 'view' : 'table';
         let sql = `create ${entityType} `;
@@ -456,6 +457,7 @@ export class MySqlTranslator<ED extends EntityDict> extends SqlTranslator<ED> {
                         default: defaultValue,
                         unique,
                         notNull,
+                        sequenceStart,
                     } = attrDef;
                     sql += `\`${attr}\` `
                     sql += this.populateDataTypeDef(type, params) as string;
@@ -465,6 +467,13 @@ export class MySqlTranslator<ED extends EntityDict> extends SqlTranslator<ED> {
                     }
                     if (unique) {
                         sql += ' unique ';
+                    }
+                    if (sequenceStart) {
+                        if (hasSequence) {
+                            throw new Error(`「${entity as string}」只能有一个sequence列`);
+                        }
+                        hasSequence = sequenceStart;
+                        sql += ' auto_increment unique ';                        
                     }
                     if (defaultValue !== undefined) {
                         assert(type !== 'ref');
@@ -535,6 +544,9 @@ export class MySqlTranslator<ED extends EntityDict> extends SqlTranslator<ED> {
         
         
         sql += ')';
+        if (typeof hasSequence === 'number') {
+            sql += `auto_increment = ${hasSequence}`;
+        }
         
         if (!replace) {
             return [sql];
