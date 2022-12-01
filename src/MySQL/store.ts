@@ -57,24 +57,16 @@ export class MysqlStore<ED extends EntityDict & BaseEntityDict, Cxt extends Asyn
                 if (i !== -1) {
                     const attrHead = attr.slice(0, i);
                     const attrTail = attr.slice(i + 1);
+                    if (!r[attrHead]) {
+                        r[attrHead] = {};
+                    }
                     const rel = judgeRelation(schema, entity2, attrHead);
-                    assert(rel === 2 || typeof rel === 'string');
                     if (rel === 2) {
-                        if (r.entity === attrHead) {
-                            if (!r[attrHead]) {
-                                r[attrHead] = {};
-                            }
-                            resolveAttribute(attrHead, r[attrHead], attrTail, value);
-                        }
+                        resolveAttribute(attrHead, r[attrHead], attrTail, value);
                     }
                     else {
-                        assert(typeof rel === 'string');
-                        if (typeof r[`${attrHead}Id`] === 'string') {
-                            if (!r[attrHead]) {
-                                r[attrHead] = {};
-                            }
-                            resolveAttribute(rel, r[attrHead], attrTail, value);
-                        }
+                        assert (typeof rel === 'string');
+                        resolveAttribute(rel, r[attrHead], attrTail, value);
                     }
                 }
                 else if (attributes[attr]) {
@@ -149,24 +141,29 @@ export class MysqlStore<ED extends EntityDict & BaseEntityDict, Cxt extends Asyn
         }
 
 
-        function formalizeNullObject<E extends keyof ED>(r: Record<string, any>, e: E) {
-            const { attributes: a2 } = schema[e];
-            let allowFormalize = true;
+        function removeNullObjects<E extends keyof ED>(r: Record<string, any>, e: E) {
+            assert(r.id && typeof r.id === 'string', `对象${<string>e}取数据时发现id为非法值${r.id},rowId是${r.id}`)
+
             for (let attr in r) {
-                if (typeof r[attr] === 'object' && a2[attr] && a2[attr].type === 'ref') {
-                    if (formalizeNullObject(r[attr], a2[attr].ref!)) {
-                        r[attr] = null;
+                const rel = judgeRelation(schema, e, attr);
+                if (rel === 2) {
+                    assert (r.entityId === r[attr].id, `对象${<string>e}取数据时，发现entityId与连接的对象的主键不一致，rowId是${r.id}，其entityId值为${r.entityId}，连接的对象的主键为${r[attr].id}`);
+                    if (r.entityId === null) {
+                        delete r[attr];
+                        continue;
                     }
-                    else {
-                        allowFormalize = false;
-                    }
+                    assert (r.entity === attr, `对象${<string>e}取数据时，发现entity值与连接的外键对象不一致，rowId是${r.id}，其entity值为${r.entity}，连接的对象为${attr}`);
+                    removeNullObjects(r[attr], attr);
                 }
-                else if (r[attr] !== null) {
-                    allowFormalize = false;
+                else if (typeof rel === 'string') {
+                    assert (r[`${attr}Id`] === r[attr].id, `对象${<string>e}取数据时，发现其外键与连接的对象的主键不一致，rowId是${r.id}，其${attr}Id值为${r[`${attr}Id`]}，连接的对象的主键为${r[attr].id}`);
+                    if (r[`${attr}Id`] === null) {
+                        delete r[attr];
+                        continue;
+                    }
+                    removeNullObjects(r[attr], rel);
                 }
             }
-
-            return allowFormalize;
         }
 
         function formSingleRow(r: any): any {
@@ -176,7 +173,7 @@ export class MysqlStore<ED extends EntityDict & BaseEntityDict, Cxt extends Asyn
                 resolveAttribute(entity, result2, attr, value);
             }
 
-            formalizeNullObject(result2, entity);
+            removeNullObjects(result2, entity);
             return result2 as any;
         }
 
