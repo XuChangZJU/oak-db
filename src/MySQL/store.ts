@@ -147,8 +147,10 @@ export class MysqlStore<ED extends EntityDict & BaseEntityDict, Cxt extends Asyn
             for (let attr in r) {
                 const rel = judgeRelation(schema, e, attr);
                 if (rel === 2) {
-                    assert (r.entityId === r[attr].id, `对象${<string>e}取数据时，发现entityId与连接的对象的主键不一致，rowId是${r.id}，其entityId值为${r.entityId}，连接的对象的主键为${r[attr].id}`);
-                    if (r.entityId === null) {
+                    // 边界，如果是toModi的对象，这里的外键确实有可能为空
+                    assert (schema[e].toModi || r.entityId === r[attr].id, `对象${<string>e}取数据时，发现entityId与连接的对象的主键不一致，rowId是${r.id}，其entityId值为${r.entityId}，连接的对象的主键为${r[attr].id}`);
+                    if (r[attr].id === null) {
+                        assert(schema[e].toModi);
                         delete r[attr];
                         continue;
                     }
@@ -156,8 +158,10 @@ export class MysqlStore<ED extends EntityDict & BaseEntityDict, Cxt extends Asyn
                     removeNullObjects(r[attr], attr);
                 }
                 else if (typeof rel === 'string') {
-                    assert (r[`${attr}Id`] === r[attr].id, `对象${<string>e}取数据时，发现其外键与连接的对象的主键不一致，rowId是${r.id}，其${attr}Id值为${r[`${attr}Id`]}，连接的对象的主键为${r[attr].id}`);
-                    if (r[`${attr}Id`] === null) {
+                    // 边界，如果是toModi的对象，这里的外键确实有可能为空
+                    assert (schema[e].toModi || r[`${attr}Id`] === r[attr].id, `对象${<string>e}取数据时，发现其外键与连接的对象的主键不一致，rowId是${r.id}，其${attr}Id值为${r[`${attr}Id`]}，连接的对象的主键为${r[attr].id}`);
+                    if (r[attr].id === null) {
+                        assert(schema[e].toModi);
                         delete r[attr];
                         continue;
                     }
