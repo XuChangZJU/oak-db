@@ -148,9 +148,9 @@ export class MysqlStore<ED extends EntityDict & BaseEntityDict, Cxt extends Asyn
                 const rel = judgeRelation(schema, e, attr);
                 if (rel === 2) {
                     // 边界，如果是toModi的对象，这里的外键确实有可能为空
-                    assert (schema[e].toModi || r.entityId === r[attr].id, `对象${<string>e}取数据时，发现entityId与连接的对象的主键不一致，rowId是${r.id}，其entityId值为${r.entityId}，连接的对象的主键为${r[attr].id}`);
+                    assert (schema[e].toModi || r.entity !== attr || r.entityId === r[attr].id, `对象${<string>e}取数据时，发现entityId与连接的对象的主键不一致，rowId是${r.id}，其entityId值为${r.entityId}，连接的对象的主键为${r[attr].id}`);
                     if (r[attr].id === null) {
-                        assert(schema[e].toModi || r.entityId === null);
+                        assert(schema[e].toModi || r.entity !== attr);
                         delete r[attr];
                         continue;
                     }
