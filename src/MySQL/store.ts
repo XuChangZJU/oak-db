@@ -18,7 +18,7 @@ function convertGeoTextToObject(geoText: string): object {
 
         return {
             type: 'Point',
-            coordinates: coord.map(
+            coordinate: coord.map(
                 ele => parseFloat(ele)
             ),
         };
