@@ -150,7 +150,7 @@ export class MysqlStore<ED extends EntityDict & BaseEntityDict, Cxt extends Asyn
                     // 边界，如果是toModi的对象，这里的外键确实有可能为空
                     assert (schema[e].toModi || r.entityId === r[attr].id, `对象${<string>e}取数据时，发现entityId与连接的对象的主键不一致，rowId是${r.id}，其entityId值为${r.entityId}，连接的对象的主键为${r[attr].id}`);
                     if (r[attr].id === null) {
-                        assert(schema[e].toModi);
+                        assert(schema[e].toModi || r.entityId === null);
                         delete r[attr];
                         continue;
                     }
@@ -161,7 +161,7 @@ export class MysqlStore<ED extends EntityDict & BaseEntityDict, Cxt extends Asyn
                     // 边界，如果是toModi的对象，这里的外键确实有可能为空
                     assert (schema[e].toModi || r[`${attr}Id`] === r[attr].id, `对象${<string>e}取数据时，发现其外键与连接的对象的主键不一致，rowId是${r.id}，其${attr}Id值为${r[`${attr}Id`]}，连接的对象的主键为${r[attr].id}`);
                     if (r[attr].id === null) {
-                        assert(schema[e].toModi);
+                        assert(schema[e].toModi || r[`${attr}Id`] === null);
                         delete r[attr];
                         continue;
                     }
