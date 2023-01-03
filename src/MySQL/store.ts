@@ -1,5 +1,5 @@
 import { EntityDict, DeduceCreateSingleOperation, DeduceRemoveOperation, DeduceUpdateOperation, OperateOption,
-    OperationResult, TxnOption, StorageSchema, DeduceCreateMultipleOperation, SelectOption } from 'oak-domain/lib/types';
+    OperationResult, TxnOption, StorageSchema, DeduceCreateMultipleOperation, SelectOption, AggregationResult } from 'oak-domain/lib/types';
 import { EntityDict as BaseEntityDict } from 'oak-domain/lib/base-app-domain';
 import { CascadeStore } from 'oak-domain/lib/store/CascadeStore';
 import { MySQLConfiguration } from './types/Configuration';
@@ -41,6 +41,9 @@ export class MysqlStore<ED extends EntityDict & BaseEntityDict, Cxt extends Asyn
         super(storageSchema);
         this.connector = new MySqlConnector(configuration);
         this.translator = new MySqlTranslator(storageSchema);
+    }
+    aggregate<T extends keyof ED, OP extends SelectOption>(entity: T, aggregation: ED[T]['Aggregation'], context: Cxt, option: OP): Promise<AggregationResult<ED[T]['Schema']>> {
+        throw new Error('Method not implemented.');
     }
     protected supportManyToOneJoin(): boolean {
         return true;

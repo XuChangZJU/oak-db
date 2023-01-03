@@ -1,12 +1,13 @@
 import assert from 'assert';
-import { UniversalContext } from 'oak-domain/lib/store/UniversalContext';
+import { describe, it } from 'mocha';
+import { TestContext } from './Context';
 import { v4 } from 'uuid';
 import { MysqlStore } from '../src/MySQL/store';
 import { EntityDict, storageSchema } from './test-app-domain';
 
 describe('test mysqlstore', function() {
     this.timeout(100000);
-    let store: MysqlStore<EntityDict, UniversalContext<EntityDict>>;
+    let store: MysqlStore<EntityDict, TestContext>;
 
     before(async () => {
         store = new MysqlStore(storageSchema, {
@@ -22,8 +23,10 @@ describe('test mysqlstore', function() {
     });
 
     it('test insert', async () => {
-        const context = new UniversalContext(store);
+        const context = new TestContext(store);
+        await context.begin();
         await store.operate('user', {
+            id: v4(),
             action: 'create',
             data: [
                 {
@@ -37,11 +40,12 @@ describe('test mysqlstore', function() {
                     nickname: 'zzz',
                 }
             ]
-        }, context);
+        }, context, {});
+        await context.commit();
     });
 
     it('test cascade insert', async () => {
-        const context = new UniversalContext(store);
+        const context = new TestContext(store);
         await store.operate('user', {
             action: 'create',
             data: {
@@ -49,6 +53,7 @@ describe('test mysqlstore', function() {
                 name: 'xxxc',
                 nickname: 'ddd',
                 token$player: [{
+                    id: v4(),
                     action: 'create',
                     data: {
                         id:  v4(),
@@ -61,14 +66,16 @@ describe('test mysqlstore', function() {
                         entityId: v4(),
                     }
                 }]
-            }
-        }, context);
+            } as EntityDict['user']['CreateSingle']['data']
+        }, context, {});
     });
 
     it('test update', async () => {
-        const context = new UniversalContext(store);
+        const context = new TestContext(store);
         const tokenId = v4();
+        await context.begin();
         await store.operate('user', {
+            id: v4(),
             action: 'create',
             data: {
                 id: v4(),
@@ -88,8 +95,9 @@ describe('test mysqlstore', function() {
                     }
                 }]
             }
-        }, context);
+        } as EntityDict['user']['CreateSingle'], context, {});
         await store.operate('token', {
+            id: v4(),
             action: 'update',
             filter: {
                 id: tokenId,
@@ -102,13 +110,16 @@ describe('test mysqlstore', function() {
                     },
                 }
             }
-        }, context);
+        }, context, {});
+        await context.commit();
     });
 
     it('test delete', async () => {
-        const context = new UniversalContext(store);
+        const context = new TestContext(store);
         const tokenId = v4();
+        await context.begin();
         await store.operate('user', {
+            id: v4(),
             action: 'create',
             data: {
                 id: v4(),
@@ -119,7 +130,7 @@ describe('test mysqlstore', function() {
                     data: {
                         id:  tokenId,
                         env: {
-                            type: 'web',
+                            type: 'server',
                         },
                         applicationId: v4(),
                         userId: v4(),
@@ -128,8 +139,9 @@ describe('test mysqlstore', function() {
                     }
                 }]
             }
-        }, context);
+        }, context, {});
         await store.operate('token', {
+            id: v4(),
             action: 'remove',
             filter: {
                 id: tokenId,
@@ -142,26 +154,30 @@ describe('test mysqlstore', function() {
                     },
                 }
             }
-        }, context);
+        }, context, {});
+        await context.commit();
     });
 
 
     it('test delete2', async () => {
         // 这个例子暂在mysql上过不去，先放着吧
-        const context = new UniversalContext(store);
+        const context = new TestContext(store);
         const tokenId = v4();
+        await context.begin();
         await store.operate('user', {
+            id: v4(),
             action: 'create',
             data: {
                 id: v4(),
                 name: 'xxxc',
                 nickname: 'ddd',
                 token$player: [{
+                    id: v4(),
                     action: 'create',
                     data: {
                         id:  tokenId,
                         env: {
-                            type: 'web',
+                            type: 'server',
                         },
                         applicationId: v4(),
                         userId: v4(),
@@ -170,8 +186,9 @@ describe('test mysqlstore', function() {
                     }
                 }]
             }
-        }, context);
+        }, context, {});
         await store.operate('user', {
+            id: v4(),
             action: 'remove',
             filter: {
                 id: tokenId,
@@ -182,20 +199,22 @@ describe('test mysqlstore', function() {
                     data: {},
                 }
             },
-        }, context);
+        }, context, {});
+        await context.commit();
     });
 
     it('[1.1]子查询', async () => {
-        const context = new UniversalContext(store);
-
+        const context = new TestContext(store);
+        await context.begin();
         await store.operate('user', {
+            id: v4(),
             action: 'create',
             data: {
                 id: v4(),
                 name: 'xc',
                 nickname: 'xc',
             }
-        }, context);
+        }, context, {});
 
         /**
          * 这个子查询没有跨结点的表达式，所以应该可以提前计算子查询的值
@@ -222,27 +241,29 @@ describe('test mysqlstore', function() {
                     },
                 }
             },
-        }, context);
+        }, context, {});
         process.env.NODE_ENV = undefined;
         // console.log(rows);
-        assert(rows.result.length === 0);
+        assert(rows.length === 0);
+        await context.commit();
     });
 
     it('[1.2]行内属性上的表达式', async () => {
-        const context = new UniversalContext(store);
-
+        const context = new TestContext(store);
+        await context.begin();
         const id = v4();
         await store.operate('user', {
+            id: v4(),
             action: 'create',
             data: {
                 id,
                 name: 'xc',
                 nickname: 'xc',
             }
-        }, context);
+        }, context, {});
 
         process.env.NODE_ENV = 'development';
-        const { result: users } = await store.select('user', {
+        const users = await store.select('user', {
             data: {
                 id: 1,
                 name: 1,
@@ -259,18 +280,21 @@ describe('test mysqlstore', function() {
                 },
                 id,
             },
-        }, context);
+        }, context, {});
         process.env.NODE_ENV = undefined;
 
         assert(users.length === 1);
+        await context.commit();
     });
 
     it('[1.3]跨filter结点的表达式', async () => {
-        const context = new UniversalContext(store);
+        const context = new TestContext(store);
 
         const id1 = v4();
         const id2 = v4();
+        await context.begin();
         await store.operate('application', {
+            id: v4(),
             action: 'create',
             data: [{
                 id: id1,
@@ -279,16 +303,19 @@ describe('test mysqlstore', function() {
                 type: 'web',
                 config: {
                     type: 'web',
-                    domain: 'http://www.tt.com',
+                    passport: [],
                 },
                 system: {
+                    id: v4(),
                     action: 'create',
                     data: {
                         id: 'bbb',
                         name: 'systest',
                         description: 'aaaaa',
                         config: {},
-                    }
+                        folder: '/systest',
+                        platformId: 'platform-111',
+                    } as EntityDict['system']['CreateSingle']['data']
                 }
             }, {
                 id: id2,
@@ -297,21 +324,26 @@ describe('test mysqlstore', function() {
                 type: 'web',
                 config: {
                     type: 'web',
-                    domain: 'http://www.tt.com',
+                    passport: [],
                 },
                 system: {
+                    id: v4(),
                     action: 'create',
                     data: {
                         id: 'ccc',
                         name: 'test2',
                         description: 'aaaaa2',
-                        config: {},
+                        config: {
+                            App: {},
+                        },
+                        folder: '/test2',
+                        platformId: 'platform-111',
                     }
                 }
             }]
-        }, context);
+        }, context, {});
 
-        const { result: applications } = await store.select('application', {
+        const applications = await store.select('application', {
             data: {
                 id: 1,
                 name: 1,
@@ -348,16 +380,19 @@ describe('test mysqlstore', function() {
                     $direction: 'asc',
                 }
             ]
-        }, context);
+        }, context, {});
         console.log(applications);
         assert(applications.length === 1 && applications[0].id === id2);
+        await context.commit();
     });
 
 
     it('[1.4]跨filter子查询的表达式', async () => {
-        const context = new UniversalContext(store);
+        const context = new TestContext(store);
+        await context.begin();
 
         await store.operate('application', {
+            id: v4(),
             action: 'create',
             data: [{
                 id: 'aaa',
@@ -366,15 +401,20 @@ describe('test mysqlstore', function() {
                 type: 'web',
                 config: {
                     type: 'web',
-                    domain: 'http://www.tt.com',
+                    passport: [],
                 },
                 system: {
+                    id: v4(),
                     action: 'create',
                     data: {
                         id: 'bbb',
                         name: 'systest',
                         description: 'aaaaa',
-                        config: {},
+                        config: {
+                            App: {},
+                        },
+                        folder: '/systest',
+                        platformId: 'platform-111',
                     }
                 }
             }, {
@@ -384,19 +424,24 @@ describe('test mysqlstore', function() {
                 type: 'web',
                 config: {
                     type: 'web',
-                    domain: 'http://www.tt.com',
+                    passport: [],
                 },
                 system: {
+                    id: v4(),
                     action: 'create',
                     data: {
                         id: 'ccc',
                         name: 'test2',
                         description: 'aaaaa2',
-                        config: {},
+                        config: {
+                            App: {},
+                        },
+                        folder: '/test2',
+                        platformId: 'platform-111',
                     }
                 }
             }]
-        }, context);
+        }, context, {});
 
         process.env.NODE_ENV = 'development';
         let systems = await store.select('system', {
@@ -437,8 +482,8 @@ describe('test mysqlstore', function() {
                     $direction: 'asc',
                 }
             ]
-        }, context);
-        assert(systems.result.length === 1 && systems.result[0].id === 'bbb');
+        }, context, {});
+        assert(systems.length === 1 && systems[0].id === 'bbb');
         systems = await store.select('system', {
             data: {
                 id: 1,
@@ -476,15 +521,18 @@ describe('test mysqlstore', function() {
                     $direction: 'asc',
                 }
             ]
-        }, context);
+        }, context, {});
         process.env.NODE_ENV = undefined;
-        assert(systems.result.length === 1 && systems.result[0].id === 'ccc');
+        assert(systems.length === 1 && systems[0].id === 'ccc');
+        await context.commit();
     });
 
     it('[1.5]projection中的跨结点表达式', async () => {
-        const context = new UniversalContext(store);
+        const context = new TestContext(store);
+        await context.begin();
 
         await store.operate('application', {
+            id: v4(),
             action: 'create',
             data: [{
                 id: 'aaa',
@@ -493,15 +541,20 @@ describe('test mysqlstore', function() {
                 type: 'web',
                 config: {
                     type: 'web',
-                    domain: 'http://www.tt.com',
+                    passport: [],
                 },
                 system: {
+                    id: v4(),
                     action: 'create',
                     data: {
                         id: 'bbb',
                         name: 'systest',
                         description: 'aaaaa',
-                        config: {},
+                        config: {
+                            App: {},
+                        },
+                        folder: '/systest',
+                        platformId: 'platform-111',
                     }
                 }
             }, {
@@ -511,19 +564,24 @@ describe('test mysqlstore', function() {
                 type: 'web',
                 config: {
                     type: 'web',
-                    domain: 'http://www.tt.com',
+                    passport: [],
                 },
                 system: {
+                    id: v4(),
                     action: 'create',
                     data: {
                         id: 'ccc',
                         name: 'test2',
                         description: 'aaaaa2',
-                        config: {},
-                    }
+                        config: {
+                            App: {},
+                        },
+                        folder: '/test2',
+                        platformId: 'platform-111',
+                    } as EntityDict['system']['CreateSingle']['data'],
                 }
             }]
-        }, context);
+        }, context, {});
 
         let applications = await store.select('application', {
             data: {
@@ -546,10 +604,10 @@ describe('test mysqlstore', function() {
                     },
                 }
             },
-        }, context);
+        }, context, {});
         // console.log(applications);
-        assert(applications.result.length === 2);
-        applications.result.forEach(
+        assert(applications.length === 2);
+        applications.forEach(
             (app) => {
                 assert(app.id === 'aaa' && app.system!.$expr === false 
                     || app.id === 'aaa2' && app.system!.$expr === true);
@@ -577,56 +635,65 @@ describe('test mysqlstore', function() {
                     name: 1,
                 }
             },
-        }, context);
+        }, context, {});
         console.log(applications2);
         // assert(applications.length === 2);
-        applications2.result.forEach(
+        applications2.forEach(
             (app) => {
                 assert(app.id === 'aaa' && app.$expr === false
                     || app.id === 'aaa2' && app.$expr === true);
             }
         );
+        await context.commit();
     });
 
     // 这个貌似目前支持不了 by Xc
     it('[1.6]projection中的一对多跨结点表达式', async () => {
-        const context = new UniversalContext(store);
+        const context = new TestContext(store);
+        await context.begin();
 
         await store.operate('system', {
+            id: v4(),
             action: 'create',
             data: {
                 id: 'bbb',
                 name: 'test2',
                 description: 'aaaaa',
-                config: {},
+                config: {
+                    App: {},
+                },
+                folder: '/test2',
+                platformId: 'platform-111',
                 application$system: [{
+                    id: v4(),
                     action: 'create',
-                    data: [
-                        {
-                            id: 'aaa',
-                            name: 'test',
-                            description: 'ttttt',
+                    data: {
+                        id: 'aaa',
+                        name: 'test',
+                        description: 'ttttt',
+                        type: 'web',
+                        config: {
                             type: 'web',
-                            config: {
-                                type: 'web',
-                                domain: 'http://www.tt.com',
-                            },
+                            passport: [],
                         },
-                        {
-
-                            id: 'aaa2',
-                            name: 'test2',
-                            description: 'ttttt2',
-                            type: 'wechatMp',
-                            config: {
-                                type: 'web',
-                                domain: 'http://www.tt.com',
-                            },
-                        }
-                    ]
+                    }
+                },
+                {
+                    id: v4(),
+                    action: 'create',
+                    data: {
+                        id: 'aaa2',
+                        name: 'test2',
+                        description: 'ttttt2',
+                        type: 'wechatMp',
+                        config: {
+                            type: 'web',
+                            passport: [],
+                        },
+                    }
                 }]
             }
-        }, context);
+        } as EntityDict['system']['CreateSingle'], context, {});
 
         const systems = await store.select('system', {
             data: {
@@ -656,10 +723,10 @@ describe('test mysqlstore', function() {
                     }
                 },
             },
-        }, context);
+        }, context, {});
         // console.log(systems);
-        assert(systems.result.length === 1);    
-        const [ system ] = systems.result;
+        assert(systems.length === 1);    
+        const [ system ] = systems;
         const { application$system: applications }  = system;
         assert(applications!.length === 2);
         applications!.forEach(
@@ -671,43 +738,51 @@ describe('test mysqlstore', function() {
     });
 
     it('[1.7]事务性测试', async () => {
-        const context = new UniversalContext(store);
+        const context = new TestContext(store);
 
+        await context.begin();
         await store.operate('system', {
+            id: v4(),
             action: 'create',
             data: {
                 id: 'bbb',
                 name: 'test2',
                 description: 'aaaaa',
-                config: {},
+                config: {
+                    App: {},
+                },
+                folder: '/test2',
+                platformId: 'platform-111',
                 application$system: [{
+                    id: v4(),
                     action: 'create',
-                    data: [
-                        {
-                            id: 'aaa',
-                            name: 'test',
-                            description: 'ttttt',
+                    data: {
+                        id: 'aaa',
+                        name: 'test',
+                        description: 'ttttt',
+                        type: 'web',
+                        config: {
                             type: 'web',
-                            config: {
-                                type: 'web',
-                                domain: 'http://www.tt.com',
-                            },
+                            passport: [],
                         },
-                        {
-
-                            id: 'aaa2',
-                            name: 'test2',
-                            description: 'ttttt2',
-                            type: 'wechatMp',
-                            config: {
-                                type: 'web',
-                                domain: 'http://www.tt.com',
-                            },
-                        }
-                    ]
+                    }
+                }, {
+                    id: v4(),
+                    action: 'create',
+                    data: {
+                        id: 'aaa2',
+                        name: 'test2',
+                        description: 'ttttt2',
+                        type: 'wechatMp',
+                        config: {
+                            type: 'web',
+                            passport: [],
+                        },
+                    }
                 }]
             }
-        }, context);
+        }, context, {});
+        await context.commit();
 
         await context.begin();
         const systems = await store.select('system', {
@@ -722,16 +797,17 @@ describe('test mysqlstore', function() {
                     }
                 },
             },
-        }, context);
-        assert(systems.result.length === 1 && systems.result[0].application$system!.length === 2);
+        }, context, {});
+        assert(systems.length === 1 && systems[0].application$system!.length === 2);
         
         await store.operate('application', {
+            id: v4(),
             action: 'remove',
             data: {},
             filter: {
                 id: 'aaa',
             }
-        }, context);
+        }, context, {});
 
         const systems2 = await store.select('system', {
             data: {
@@ -745,8 +821,8 @@ describe('test mysqlstore', function() {
                     }
                 },
             },
-        }, context);
-        assert(systems2.result.length === 1 && systems2.result[0].application$system!.length === 1);
+        }, context, {});
+        assert(systems2.length === 1 && systems2[0].application$system!.length === 1);
         await context.rollback();
 
         const systems3 = await store.select('system', {
@@ -761,8 +837,8 @@ describe('test mysqlstore', function() {
                     }
                 },
             },
-        }, context);
-        assert(systems3.result.length === 1 && systems3.result[0].application$system!.length === 2);
+        }, context, {});
+        assert(systems3.length === 1 && systems3[0].application$system!.length === 2);
     });
 
     after(() => {

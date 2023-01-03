@@ -1,3 +1,4 @@
+import { describe, it } from 'mocha';
 import { MySqlTranslator } from '../src/MySQL/translator';
 import { EntityDict, storageSchema } from './test-app-domain';
 

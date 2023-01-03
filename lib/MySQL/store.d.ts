@@ -1,4 +1,4 @@
-import { EntityDict, DeduceCreateSingleOperation, DeduceRemoveOperation, DeduceUpdateOperation, OperateOption, OperationResult, TxnOption, StorageSchema, DeduceCreateMultipleOperation, SelectOption } from 'oak-domain/lib/types';
+import { EntityDict, DeduceCreateSingleOperation, DeduceRemoveOperation, DeduceUpdateOperation, OperateOption, OperationResult, TxnOption, StorageSchema, DeduceCreateMultipleOperation, SelectOption, AggregationResult } from 'oak-domain/lib/types';
 import { EntityDict as BaseEntityDict } from 'oak-domain/lib/base-app-domain';
 import { CascadeStore } from 'oak-domain/lib/store/CascadeStore';
 import { MySQLConfiguration } from './types/Configuration';
@@ -12,6 +12,7 @@ export declare class MysqlStore<ED extends EntityDict & BaseEntityDict, Cxt exte
     connector: MySqlConnector;
     translator: MySqlTranslator<ED>;
     constructor(storageSchema: StorageSchema<ED>, configuration: MySQLConfiguration);
+    aggregate<T extends keyof ED, OP extends SelectOption>(entity: T, aggregation: ED[T]['Aggregation'], context: Cxt, option: OP): Promise<AggregationResult<ED[T]['Schema']>>;
     protected supportManyToOneJoin(): boolean;
     protected supportMultipleCreate(): boolean;
     private formResult;
