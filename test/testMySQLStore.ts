@@ -5,7 +5,7 @@ import { v4 } from 'uuid';
 import { MysqlStore } from '../src/MySQL/store';
 import { EntityDict, storageSchema } from './test-app-domain';
 
-describe('test mysqlstore', function() {
+describe('test mysqlstore', function () {
     this.timeout(100000);
     let store: MysqlStore<EntityDict, TestContext>;
 
@@ -47,6 +47,7 @@ describe('test mysqlstore', function() {
     it('test cascade insert', async () => {
         const context = new TestContext(store);
         await store.operate('user', {
+            id: v4(),
             action: 'create',
             data: {
                 id: v4(),
@@ -56,7 +57,7 @@ describe('test mysqlstore', function() {
                     id: v4(),
                     action: 'create',
                     data: {
-                        id:  v4(),
+                        id: v4(),
                         env: {
                             type: 'web',
                         },
@@ -82,9 +83,10 @@ describe('test mysqlstore', function() {
                 name: 'xxxc',
                 nickname: 'ddd',
                 token$player: [{
+                    id: v4(),
                     action: 'create',
                     data: {
-                        id:  tokenId,
+                        id: tokenId,
                         env: {
                             type: 'web',
                         },
@@ -104,6 +106,7 @@ describe('test mysqlstore', function() {
             },
             data: {
                 player: {
+                    id: v4(),
                     action: 'activate',
                     data: {
                         name: 'xcxcxc0903'
@@ -126,9 +129,10 @@ describe('test mysqlstore', function() {
                 name: 'xxxc',
                 nickname: 'ddd',
                 token$player: [{
+                    id: v4(),
                     action: 'create',
                     data: {
-                        id:  tokenId,
+                        id: tokenId,
                         env: {
                             type: 'server',
                         },
@@ -148,6 +152,7 @@ describe('test mysqlstore', function() {
             },
             data: {
                 player: {
+                    id: v4(),
                     action: 'update',
                     data: {
                         name: 'xcxcxc0902'
@@ -175,7 +180,7 @@ describe('test mysqlstore', function() {
                     id: v4(),
                     action: 'create',
                     data: {
-                        id:  tokenId,
+                        id: tokenId,
                         env: {
                             type: 'server',
                         },
@@ -395,7 +400,7 @@ describe('test mysqlstore', function() {
             id: v4(),
             action: 'create',
             data: [{
-                id: 'aaa',
+                id: 'aaaa',
                 name: 'test',
                 description: 'ttttt',
                 type: 'web',
@@ -407,7 +412,7 @@ describe('test mysqlstore', function() {
                     id: v4(),
                     action: 'create',
                     data: {
-                        id: 'bbb',
+                        id: 'bbbb',
                         name: 'systest',
                         description: 'aaaaa',
                         config: {
@@ -418,7 +423,7 @@ describe('test mysqlstore', function() {
                     }
                 }
             }, {
-                id: 'aaa2',
+                id: 'aaaa2',
                 name: 'test2',
                 description: 'ttttt2',
                 type: 'web',
@@ -430,7 +435,7 @@ describe('test mysqlstore', function() {
                     id: v4(),
                     action: 'create',
                     data: {
-                        id: 'ccc',
+                        id: 'cccc',
                         name: 'test2',
                         description: 'aaaaa2',
                         config: {
@@ -451,28 +456,36 @@ describe('test mysqlstore', function() {
             },
             filter: {
                 "#id": 'node-1',
-                id: {
-                    $nin: {
-                        entity: 'application',
-                        data: {
-                            systemId: 1,
-                        },
-                        filter: {
-                            $expr: {
-                                $eq: [
-                                    {
-                                        "#attr": 'name',
+                $and: [
+                    {
+                        id: {
+                            $nin: {
+                                entity: 'application',
+                                data: {
+                                    systemId: 1,
+                                },
+                                filter: {
+                                    $expr: {
+                                        $eq: [
+                                            {
+                                                "#attr": 'name',
+                                            },
+                                            {
+                                                '#refId': 'node-1',
+                                                "#refAttr": 'name',
+                                            }
+                                        ]
                                     },
-                                    {
-                                        '#refId': 'node-1',
-                                        "#refAttr": 'name',
-                                    }
-                                ]
+                                    '#id': 'node-2',
+                                }
                             },
-                            '#id': 'node-2',
                         }
-                    },
-                }
+                    }, {
+                        id: {
+                            $in: ['bbbb', 'cccc'],
+                        }
+                    }
+                ]
             },
             sorter: [
                 {
@@ -483,7 +496,7 @@ describe('test mysqlstore', function() {
                 }
             ]
         }, context, {});
-        assert(systems.length === 1 && systems[0].id === 'bbb');
+        assert(systems.length === 1 && systems[0].id === 'bbbb');
         systems = await store.select('system', {
             data: {
                 id: 1,
@@ -491,27 +504,36 @@ describe('test mysqlstore', function() {
             },
             filter: {
                 "#id": 'node-1',
-                id: {
-                    $in: {
-                        entity: 'application',
-                        data: {
-                            systemId: 1,
-                        },
-                        filter: {
-                            $expr: {
-                                $eq: [
-                                    {
-                                        "#attr": 'name',
+                $and: [
+                    {
+                        id: {
+                            $in: {
+                                entity: 'application',
+                                data: {
+                                    systemId: 1,
+                                },
+                                filter: {
+                                    $expr: {
+                                        $eq: [
+                                            {
+                                                "#attr": 'name',
+                                            },
+                                            {
+                                                '#refId': 'node-1',
+                                                "#refAttr": 'name',
+                                            }
+                                        ]
                                     },
-                                    {
-                                        '#refId': 'node-1',
-                                        "#refAttr": 'name',
-                                    }
-                                ]
+                                }
                             },
                         }
                     },
-                }
+                    {
+                        id: {
+                            $in: ['bbbb', 'cccc'],
+                        },
+                    }
+                ]
             },
             sorter: [
                 {
@@ -523,7 +545,7 @@ describe('test mysqlstore', function() {
             ]
         }, context, {});
         process.env.NODE_ENV = undefined;
-        assert(systems.length === 1 && systems[0].id === 'ccc');
+        assert(systems.length === 1 && systems[0].id === 'cccc');
         await context.commit();
     });
 
@@ -535,7 +557,7 @@ describe('test mysqlstore', function() {
             id: v4(),
             action: 'create',
             data: [{
-                id: 'aaa',
+                id: 'aaa5',
                 name: 'test',
                 description: 'ttttt',
                 type: 'web',
@@ -547,7 +569,7 @@ describe('test mysqlstore', function() {
                     id: v4(),
                     action: 'create',
                     data: {
-                        id: 'bbb',
+                        id: 'bbb5',
                         name: 'systest',
                         description: 'aaaaa',
                         config: {
@@ -558,7 +580,7 @@ describe('test mysqlstore', function() {
                     }
                 }
             }, {
-                id: 'aaa2',
+                id: 'aaa5-2',
                 name: 'test2',
                 description: 'ttttt2',
                 type: 'web',
@@ -570,7 +592,7 @@ describe('test mysqlstore', function() {
                     id: v4(),
                     action: 'create',
                     data: {
-                        id: 'ccc',
+                        id: 'ccc5',
                         name: 'test2',
                         description: 'aaaaa2',
                         config: {
@@ -604,13 +626,18 @@ describe('test mysqlstore', function() {
                     },
                 }
             },
+            filter: {
+                id: {
+                    $in: ['aaa5', 'aaa5-2'],
+                },
+            },
         }, context, {});
         // console.log(applications);
         assert(applications.length === 2);
         applications.forEach(
             (app) => {
-                assert(app.id === 'aaa' && app.system!.$expr === false 
-                    || app.id === 'aaa2' && app.system!.$expr === true);
+                assert(app.id === 'aaa5' && !(app.system!.$expr)
+                    || app.id === 'aaa5-2' && !!(app.system!.$expr));
             }
         );
 
@@ -635,13 +662,18 @@ describe('test mysqlstore', function() {
                     name: 1,
                 }
             },
+            filter: {
+                id: {
+                    $in: ['aaa5', 'aaa5-2'],
+                },
+            },
         }, context, {});
-        console.log(applications2);
+        // console.log(applications2);
         // assert(applications.length === 2);
         applications2.forEach(
             (app) => {
-                assert(app.id === 'aaa' && app.$expr === false
-                    || app.id === 'aaa2' && app.$expr === true);
+                assert(app.id === 'aaa5' && !(app.$expr)
+                    || app.id === 'aaa5-2' && !!(app.$expr));
             }
         );
         await context.commit();
@@ -656,7 +688,7 @@ describe('test mysqlstore', function() {
             id: v4(),
             action: 'create',
             data: {
-                id: 'bbb',
+                id: 'bbb6',
                 name: 'test2',
                 description: 'aaaaa',
                 config: {
@@ -668,7 +700,7 @@ describe('test mysqlstore', function() {
                     id: v4(),
                     action: 'create',
                     data: {
-                        id: 'aaa',
+                        id: 'aaa6',
                         name: 'test',
                         description: 'ttttt',
                         type: 'web',
@@ -682,7 +714,7 @@ describe('test mysqlstore', function() {
                     id: v4(),
                     action: 'create',
                     data: {
-                        id: 'aaa2',
+                        id: 'aaa6-2',
                         name: 'test2',
                         description: 'ttttt2',
                         type: 'wechatMp',
@@ -725,9 +757,9 @@ describe('test mysqlstore', function() {
             },
         }, context, {});
         // console.log(systems);
-        assert(systems.length === 1);    
-        const [ system ] = systems;
-        const { application$system: applications }  = system;
+        assert(systems.length === 1);
+        const [system] = systems;
+        const { application$system: applications } = system;
         assert(applications!.length === 2);
         applications!.forEach(
             (ele) => {
@@ -741,11 +773,12 @@ describe('test mysqlstore', function() {
         const context = new TestContext(store);
 
         await context.begin();
+        const systemId = v4();
         await store.operate('system', {
             id: v4(),
             action: 'create',
             data: {
-                id: 'bbb',
+                id: systemId,
                 name: 'test2',
                 description: 'aaaaa',
                 config: {
@@ -757,7 +790,7 @@ describe('test mysqlstore', function() {
                     id: v4(),
                     action: 'create',
                     data: {
-                        id: 'aaa',
+                        id: 'aaa7',
                         name: 'test',
                         description: 'ttttt',
                         type: 'web',
@@ -770,7 +803,7 @@ describe('test mysqlstore', function() {
                     id: v4(),
                     action: 'create',
                     data: {
-                        id: 'aaa2',
+                        id: 'aaa7-2',
                         name: 'test2',
                         description: 'ttttt2',
                         type: 'wechatMp',
@@ -794,18 +827,22 @@ describe('test mysqlstore', function() {
                     data: {
                         id: 1,
                         name: 1,
+                        systemId: 1,
                     }
                 },
             },
+            filter: {
+                id: systemId,
+            },
         }, context, {});
         assert(systems.length === 1 && systems[0].application$system!.length === 2);
-        
+
         await store.operate('application', {
             id: v4(),
             action: 'remove',
             data: {},
             filter: {
-                id: 'aaa',
+                id: 'aaa7',
             }
         }, context, {});
 
@@ -818,8 +855,12 @@ describe('test mysqlstore', function() {
                     data: {
                         id: 1,
                         name: 1,
+                        systemId: 1,
                     }
                 },
+            },
+            filter: {
+                id: systemId,
             },
         }, context, {});
         assert(systems2.length === 1 && systems2[0].application$system!.length === 1);
@@ -834,8 +875,12 @@ describe('test mysqlstore', function() {
                     data: {
                         id: 1,
                         name: 1,
+                        systemId: 1,
                     }
                 },
+            },
+            filter: {
+                id: systemId,
             },
         }, context, {});
         assert(systems3.length === 1 && systems3[0].application$system!.length === 2);

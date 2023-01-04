@@ -130,13 +130,15 @@ export abstract class SqlTranslator<ED extends EntityDict> {
     protected abstract populateSelectStmt<T extends keyof ED, OP extends SqlSelectOption>(
         projectionText: string,
         fromText: string,
-        selection: ED[T]['Selection'],
         aliasDict: Record<string, string>,
         filterText: string,
         sorterText?: string,
+        groupByText?: string,
         indexFrom?: number,
         count?: number,
-        option?: OP): string;
+        option?: OP,
+        selection?: ED[T]['Selection'],
+        aggregation?: ED[T]['Aggregation']): string;
 
     protected abstract populateUpdateStmt<OP extends SqlOperateOption>(
         updateText: string,
@@ -228,11 +230,11 @@ export abstract class SqlTranslator<ED extends EntityDict> {
      * 这样的query会把内表为空的行也返回
      * @param param0 
      */
-    private analyzeJoin<T extends keyof ED>(entity: T, { projection, filter, sorter, isStat }: {
+    private analyzeJoin<T extends keyof ED>(entity: T, { projection, filter, sorter, aggregation }: {
         projection?: ED[T]['Selection']['data'];
+        aggregation?: ED[T]['Aggregation']['data'];
         filter?: ED[T]['Selection']['filter'];
         sorter?: ED[T]['Selection']['sorter'];
-        isStat?: true;
     }, initialNumber?: number): {
         aliasDict: Record<string, string>;
         projectionRefAlias: Record<string, string>;
@@ -410,7 +412,7 @@ export abstract class SqlTranslator<ED extends EntityDict> {
             );
         }
 
-        const analyzeProjectionNode = <E extends keyof ED>({ node, path, entityName, alias }: {
+        const analyzeProjectionNode = <E extends keyof ED>({ node, path, entityName, alias }: { 
             node: ED[E]['Selection']['data'];
             path: string;
             entityName: E;
@@ -468,7 +470,7 @@ export abstract class SqlTranslator<ED extends EntityDict> {
                 }
             );
             if (node['#id']) {
-                assert(!projectionRefAlias[node['#id']]);
+                assert(!projectionRefAlias[node['#id']], `projection上有重复的#id定义「${node['#id']}」`);
                 assign(projectionRefAlias, {
                     [node['#id']]: alias,
                 });
@@ -477,6 +479,16 @@ export abstract class SqlTranslator<ED extends EntityDict> {
 
         if (projection) {
             analyzeProjectionNode({ node: projection, path: './', entityName: entity, alias });
+        }
+        else if (aggregation) {
+            for (const k in aggregation) {
+                analyzeProjectionNode<T>({
+                    node: aggregation[k],
+                    path: './',
+                    entityName: entity,
+                    alias,
+                });
+            }
         }
 
         return {
@@ -773,8 +785,14 @@ export abstract class SqlTranslator<ED extends EntityDict> {
         entity: T,
         projection: ED[T]['Selection']['data'],
         aliasDict: Record<string, string>,
-        projectionRefAlias: Record<string, string>): string {
+        projectionRefAlias: Record<string, string>,
+        commonPrefix?: string,
+        disableAs?: boolean): {
+            projText: string,
+            as: string,
+        } {
         const { schema } = this;
+        let as = '';
         const translateInner = <E extends keyof ED>(entity2: E, projection2: ED[E]['Selection']['data'], path: string): string => {
             const alias = aliasDict[path];
             const { attributes } = schema[entity2];
@@ -792,9 +810,21 @@ export abstract class SqlTranslator<ED extends EntityDict> {
             );
             attrs.forEach(
                 (attr, idx) => {
+                    const prefix2 = commonPrefix ? `${commonPrefix}.${prefix}` : prefix;
                     if (attr.toLowerCase().startsWith(EXPRESSION_PREFIX)) {
                         const exprText = this.translateExpression(alias, projection2[attr], projectionRefAlias);
-                        projText += ` ${exprText} as ${prefix}${attr}`;
+                        if (disableAs) {
+                            projText += ` ${exprText}`;
+                        }
+                        else {
+                            projText += ` ${exprText} as \`${prefix2}${attr}\``;
+                            if (!as) {
+                                as = `\`${prefix2}${attr}\``;
+                            }
+                            else {
+                                as += `, \`${prefix2}${attr}\``;
+                            }
+                        }
                     }
                     else {
                         const rel = judgeRelation(this.schema, entity2, attr);
@@ -807,11 +837,33 @@ export abstract class SqlTranslator<ED extends EntityDict> {
                         else if (rel === 1) {
                             const { type } = attributes[attr];
                             if (projection2[attr] === 1) {
-                                projText += ` ${this.translateAttrProjection(type as DataType, alias, attr)} as \`${prefix}${attr}\``;
+                                if (disableAs) {
+                                    projText += ` ${this.translateAttrProjection(type as DataType, alias, attr)}`;                                    
+                                }
+                                else {
+                                    projText += ` ${this.translateAttrProjection(type as DataType, alias, attr)} as \`${prefix2}${attr}\``;
+                                    if (!as) {
+                                        as = `\`${prefix2}${attr}\``;
+                                    }
+                                    else {
+                                        as += `, \`${prefix2}${attr}\``;
+                                    }
+                                }
                             }
                             else {
                                 assert(typeof projection2 === 'string');
-                                projText += ` ${this.translateAttrProjection(type as DataType, alias, attr)} as \`${prefix}${projection2[attr]}\``;
+                                if (disableAs) {
+                                    projText += ` ${this.translateAttrProjection(type as DataType, alias, attr)}`;
+                                }
+                                else {
+                                    projText += ` ${this.translateAttrProjection(type as DataType, alias, attr)} as \`${prefix2}${projection2[attr]}\``;
+                                    if (!as) {
+                                        as = `\`${prefix2}${projection2[attr]}\``;
+                                    }
+                                    else {
+                                        as += `\`${prefix2}${projection2[attr]}\``;
+                                    }
+                                }
                             }
                         }
                     }
@@ -824,7 +876,10 @@ export abstract class SqlTranslator<ED extends EntityDict> {
             return projText;
         };
 
-        return translateInner(entity, projection, './');
+        return {
+            projText: translateInner(entity, projection, './'),
+            as,
+        };
     }
 
     private translateSelectInner<T extends keyof ED, OP extends SqlSelectOption>(entity: T, selection: ED[T]['Selection'], initialNumber: number, refAlias: Record<string, string>, option?: OP): {
@@ -840,14 +895,14 @@ export abstract class SqlTranslator<ED extends EntityDict> {
         assert(intersection(keys(refAlias), keys(filterRefAlias)).length === 0, 'filter中的#node结点定义有重复');
         assign(refAlias, filterRefAlias);
 
-        const projText = this.translateProjection(entity, data, aliasDict, projectionRefAlias);
+        const { projText } = this.translateProjection(entity, data, aliasDict, projectionRefAlias);
 
         const { stmt: filterText, currentNumber: currentNumber2 } = this.translateFilter(entity, selection, aliasDict, refAlias, currentNumber, extraWhere, option);
 
         const sorterText = sorter && this.translateSorter(entity, sorter, aliasDict);
 
         return {
-            stmt: this.populateSelectStmt(projText, fromText, selection, aliasDict, filterText, sorterText, indexFrom, count, option),
+            stmt: this.populateSelectStmt(projText, fromText, aliasDict, filterText, sorterText, undefined, indexFrom, count, option, selection),
             currentNumber: currentNumber2,
         };
     }
@@ -855,6 +910,63 @@ export abstract class SqlTranslator<ED extends EntityDict> {
     translateSelect<T extends keyof ED, OP extends SqlSelectOption>(entity: T, selection: ED[T]['Selection'], option?: OP): string {
         const { stmt } = this.translateSelectInner(entity, selection, 1, {}, option);
         return stmt;
+    }
+
+
+    translateAggregate<T extends keyof ED, OP extends SqlSelectOption>(entity: T, aggregation: ED[T]['Aggregation'], option?: OP): string {
+        const { data, filter, sorter, indexFrom, count } = aggregation;
+        const { from : fromText, aliasDict, projectionRefAlias, extraWhere, filterRefAlias, currentNumber } = this.analyzeJoin(entity, {
+            aggregation: data,
+            filter,
+            sorter,
+        }, 1);
+
+        let projText = '';
+        let groupByText = '';
+        for (const k in data) {
+            if (k === '$aggr') {
+                const { projText: projSubText, as } = this.translateProjection(entity, data[k]!, aliasDict, projectionRefAlias, 'data');
+                if (!projText) {
+                    projText = projSubText;
+                }
+                else {
+                    projText += `, ${projSubText}`;
+                }
+                groupByText = as;
+            }
+            else {
+                const { projText: projSubText } = this.translateProjection(entity, (data as any)[k]!, aliasDict, projectionRefAlias, undefined, true);
+                let projSubText2 = '';
+                if (k.startsWith('$max')) {
+                    projSubText2 = `max(${projSubText}) as \`${k}\``;
+                }
+                else if (k.startsWith('$min')) {
+                    projSubText2 = `min(${projSubText}) as \`${k}\``;
+                }
+                else if (k.startsWith('$count')) {
+                    projSubText2 = `count(${projSubText}) as \`${k}\``;
+                }
+                else if (k.startsWith('$sum')) {
+                    projSubText2 = `sum(${projSubText}) as \`${k}\``;
+                }
+                else {
+                    assert(k.startsWith('$avg'));
+                    projSubText2 = `avg(${projSubText}) as \`${k}\``;
+                }
+                if (!projText) {
+                    projText = projSubText2;
+                }
+                else {
+                    projText += `, ${projSubText2}`;
+                }
+            }
+        }
+
+        const { stmt: filterText } = this.translateFilter(entity, aggregation, aliasDict, {}, currentNumber, extraWhere, option);
+
+        const sorterText = sorter && this.translateSorter(entity, sorter, aliasDict);
+
+        return this.populateSelectStmt(projText, fromText, aliasDict, filterText, sorterText, groupByText, indexFrom, count, option, undefined, aggregation);
     }
 
     translateCount<T extends keyof ED, OP extends SqlSelectOption>(entity: T, selection: Pick<ED[T]['Selection'], 'filter' | 'count'>, option?: OP): string {
@@ -868,10 +980,10 @@ export abstract class SqlTranslator<ED extends EntityDict> {
         const { stmt: filterText } = this.translateFilter(entity, selection as ED[T]['Selection'], aliasDict, filterRefAlias, currentNumber, extraWhere, option);
 
         if (count) {
-            const subQuerySql = this.populateSelectStmt('1', fromText, Object.assign({}, selection, { indexFrom: 0, count }) as ED[T]['Selection'], aliasDict, filterText, undefined, undefined, undefined, option);
+            const subQuerySql = this.populateSelectStmt('1', fromText, aliasDict, filterText, undefined, undefined, undefined, undefined, option, Object.assign({}, selection, { indexFrom: 0, count }) as ED[T]['Selection']);
             return `select count(1) cnt from (${subQuerySql}) __tmp`;
         }
-        return this.populateSelectStmt(projText, fromText, selection as ED[T]['Selection'], aliasDict, filterText, undefined, undefined, undefined, option);
+        return this.populateSelectStmt(projText, fromText, aliasDict, filterText, undefined, undefined, undefined, undefined, option, selection as ED[T]['Selection']);
     }
 
     translateRemove<T extends keyof ED, OP extends SqlOperateOption>(entity: T, operation: ED[T]['Remove'], option?: OP): string {

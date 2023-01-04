@@ -747,10 +747,10 @@ export class MySqlTranslator<ED extends EntityDict> extends SqlTranslator<ED> {
     protected populateSelectStmt<T extends keyof ED>(
         projectionText: string,
         fromText: string,
-        selection: ED[T]['Selection'],
         aliasDict: Record<string, string>,
         filterText: string,
         sorterText?: string,
+        groupByText?: string,
         indexFrom?: number,
         count?: number,
         option?: MySqlSelectOption): string {
@@ -761,6 +761,9 @@ export class MySqlTranslator<ED extends EntityDict> extends SqlTranslator<ED> {
         }
         if (sorterText) {
             sql += ` order by ${sorterText}`;
+        }
+        if (groupByText) {
+            sql += ` group by ${groupByText}`;
         }
         if (typeof indexFrom === 'number') {
             assert (typeof count === 'number');

@@ -55,5 +55,41 @@ describe('test MysqlTranslator', function() {
         });
         console.log(sql);
     });
-    
+
+    it('test aggregation', () => {
+        const sql = translator.translateAggregate('token', {
+            data: {
+                '$max-1': {
+                    user: {
+                        nickname: 1,
+                    },
+                },
+                $aggr: {
+                    email: {
+                        email: 1,
+                        $$createAt$$: 1,
+                    },
+                },
+            },
+            filter: {
+                userId: {
+                    $in: {
+                        entity: 'user',
+                        data: {
+                            id: 1,
+                        },
+                        filter: {
+                            name: {
+                                $includes: 'xc',
+                            },
+                        },
+                    },
+                },
+            },
+            indexFrom: 0,
+            count: 10,
+        });
+        
+        console.log(sql);
+    });    
 });
