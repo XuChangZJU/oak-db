@@ -1,3 +1,4 @@
+import { reinforceSelection } from 'oak-domain/lib/store/selection';
 import { EntityDict, DeduceCreateSingleOperation, DeduceRemoveOperation, DeduceUpdateOperation, OperateOption,
     OperationResult, TxnOption, StorageSchema, DeduceCreateMultipleOperation, SelectOption, AggregationResult } from 'oak-domain/lib/types';
 import { EntityDict as BaseEntityDict } from 'oak-domain/lib/base-app-domain';
@@ -29,6 +30,9 @@ function convertGeoTextToObject(geoText: string): object {
 }
 
 export class MysqlStore<ED extends EntityDict & BaseEntityDict, Cxt extends AsyncContext<ED>> extends CascadeStore<ED> implements AsyncRowStore<ED, Cxt>{
+    protected aggregateSync<T extends keyof ED, OP extends SelectOption, Cxt extends SyncContext<ED>>(entity: T, aggregation: ED[T]['Aggregation'], context: Cxt, option: OP): AggregationResult<ED[T]['Schema']> {
+        throw new Error('MySQL store不支持同步取数据，不应该跑到这儿');
+    }
     protected selectAbjointRow<T extends keyof ED, OP extends SelectOption>(entity: T, selection: ED[T]['Selection'], context: SyncContext<ED>, option: OP): Partial<ED[T]['Schema']>[] {
         throw new Error('MySQL store不支持同步取数据，不应该跑到这儿');
     }
@@ -42,8 +46,12 @@ export class MysqlStore<ED extends EntityDict & BaseEntityDict, Cxt extends Asyn
         this.connector = new MySqlConnector(configuration);
         this.translator = new MySqlTranslator(storageSchema);
     }
+    protected aggregateAsync<T extends keyof ED, OP extends SelectOption, Cxt extends AsyncContext<ED>>(entity: T, aggregation: ED[T]['Aggregation'], context: Cxt, option: OP): Promise<AggregationResult<ED[T]['Schema']>> {
+        const stmt = this.translator.translateAggregate(entity, aggregation, option);
+        throw new Error('not implemented yet');
+    }
     aggregate<T extends keyof ED, OP extends SelectOption>(entity: T, aggregation: ED[T]['Aggregation'], context: Cxt, option: OP): Promise<AggregationResult<ED[T]['Schema']>> {
-        throw new Error('Method not implemented.');
+        return this.aggregateAsync(entity, aggregation, context, option);
     }
     protected supportManyToOneJoin(): boolean {
         return true;
@@ -264,6 +272,7 @@ export class MysqlStore<ED extends EntityDict & BaseEntityDict, Cxt extends Asyn
         return await this.cascadeUpdateAsync(entity, operation as any, context, option);
     }
     async select<T extends keyof ED>(entity: T, selection: ED[T]['Selection'], context: Cxt, option: SelectOption): Promise<Partial<ED[T]['Schema']>[]> {
+        reinforceSelection(this.storageSchema, entity, selection);
         const result = await this.cascadeSelectAsync(entity, selection, context, option);
         return result;
     }

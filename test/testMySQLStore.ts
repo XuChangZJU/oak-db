@@ -886,6 +886,113 @@ describe('test mysqlstore', function () {
         assert(systems3.length === 1 && systems3[0].application$system!.length === 2);
     });
 
+    it('[1.8]aggregation', async () => {
+        const context = new TestContext(store);
+        await context.begin();
+
+        const systemId1 = v4();
+        const systemId2 = v4();
+        await store.operate('system', {
+            id: v4(),
+            action: 'create',
+            data: [
+                {
+                    id: systemId1,
+                    name: 'test2',
+                    description: 'aaaaa',
+                    config: {
+                        App: {},
+                    },
+                    folder: '/test2',
+                    platformId: 'platform-111',
+                    application$system: [{
+                        id: v4(),
+                        action: 'create',
+                        data: {
+                            id: v4(),
+                            name: 'test',
+                            description: 'ttttt',
+                            type: 'web',
+                            config: {
+                                type: 'web',
+                                passport: [],
+                            },
+                        }
+                    },
+                    {
+                        id: v4(),
+                        action: 'create',
+                        data: {
+                            id: v4(),
+                            name: 'test2',
+                            description: 'ttttt2',
+                            type: 'wechatMp',
+                            config: {
+                                type: 'web',
+                                passport: [],
+                            },
+                        }
+                    }]
+                },
+                {
+                    id: systemId2,
+                    name: 'test2',
+                    description: 'aaaaa',
+                    config: {
+                        App: {},
+                    },
+                    folder: '/test2',
+                    platformId: 'platform-111',
+                    application$system: [{
+                        id: v4(),
+                        action: 'create',
+                        data: {
+                            id: v4(),
+                            name: 'test',
+                            description: 'ttttt',
+                            type: 'web',
+                            config: {
+                                type: 'web',
+                                passport: [],
+                            },
+                        }
+                    },
+                    {
+                        id: v4(),
+                        action: 'create',
+                        data: {
+                            id: v4(),
+                            name: 'test2',
+                            description: 'ttttt2',
+                            type: 'wechatMp',
+                            config: {
+                                type: 'web',
+                                passport: [],
+                            },
+                        }
+                    }]
+                }
+            ]
+        } as EntityDict['system']['CreateMulti'], context, {});
+        await context.commit();
+
+        await context.begin();
+        const result = await store.aggregate('application', {
+            data: {
+                $aggr: {
+                    system: {
+                        id: 1,
+                    },
+                },
+                '$count-1': {
+                    id: 1,
+                }
+            }
+        }, context, {});
+        await context.commit();
+        console.log(result);
+    });
+
     after(() => {
         store.disconnect();
     });
