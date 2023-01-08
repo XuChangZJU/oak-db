@@ -924,8 +924,8 @@ export abstract class SqlTranslator<ED extends EntityDict> {
         let projText = '';
         let groupByText = '';
         for (const k in data) {
-            if (k === '$aggr') {
-                const { projText: projSubText, as } = this.translateProjection(entity, data[k]!, aliasDict, projectionRefAlias, 'data');
+            if (k === '#aggr') {
+                const { projText: projSubText, as } = this.translateProjection(entity, data[k]!, aliasDict, projectionRefAlias, '#data');
                 if (!projText) {
                     projText = projSubText;
                 }
@@ -937,20 +937,20 @@ export abstract class SqlTranslator<ED extends EntityDict> {
             else {
                 const { projText: projSubText } = this.translateProjection(entity, (data as any)[k]!, aliasDict, projectionRefAlias, undefined, true);
                 let projSubText2 = '';
-                if (k.startsWith('$max')) {
+                if (k.startsWith('#max')) {
                     projSubText2 = `max(${projSubText}) as \`${k}\``;
                 }
-                else if (k.startsWith('$min')) {
+                else if (k.startsWith('#min')) {
                     projSubText2 = `min(${projSubText}) as \`${k}\``;
                 }
-                else if (k.startsWith('$count')) {
+                else if (k.startsWith('#count')) {
                     projSubText2 = `count(${projSubText}) as \`${k}\``;
                 }
-                else if (k.startsWith('$sum')) {
+                else if (k.startsWith('#sum')) {
                     projSubText2 = `sum(${projSubText}) as \`${k}\``;
                 }
                 else {
-                    assert(k.startsWith('$avg'));
+                    assert(k.startsWith('#avg'));
                     projSubText2 = `avg(${projSubText}) as \`${k}\``;
                 }
                 if (!projText) {

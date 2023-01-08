@@ -7,11 +7,13 @@ import { MySqlTranslator, MySqlSelectOption, MysqlOperateOption } from './transl
 import { AsyncContext, AsyncRowStore } from 'oak-domain/lib/store/AsyncRowStore';
 import { SyncContext } from 'oak-domain/lib/store/SyncRowStore';
 export declare class MysqlStore<ED extends EntityDict & BaseEntityDict, Cxt extends AsyncContext<ED>> extends CascadeStore<ED> implements AsyncRowStore<ED, Cxt> {
+    protected aggregateSync<T extends keyof ED, OP extends SelectOption, Cxt extends SyncContext<ED>>(entity: T, aggregation: ED[T]['Aggregation'], context: Cxt, option: OP): AggregationResult<ED[T]['Schema']>;
     protected selectAbjointRow<T extends keyof ED, OP extends SelectOption>(entity: T, selection: ED[T]['Selection'], context: SyncContext<ED>, option: OP): Partial<ED[T]['Schema']>[];
     protected updateAbjointRow<T extends keyof ED, OP extends OperateOption>(entity: T, operation: ED[T]['Operation'], context: SyncContext<ED>, option: OP): number;
     connector: MySqlConnector;
     translator: MySqlTranslator<ED>;
     constructor(storageSchema: StorageSchema<ED>, configuration: MySQLConfiguration);
+    protected aggregateAsync<T extends keyof ED, OP extends SelectOption, Cxt extends AsyncContext<ED>>(entity: T, aggregation: ED[T]['Aggregation'], context: Cxt, option: OP): Promise<AggregationResult<ED[T]['Schema']>>;
     aggregate<T extends keyof ED, OP extends SelectOption>(entity: T, aggregation: ED[T]['Aggregation'], context: Cxt, option: OP): Promise<AggregationResult<ED[T]['Schema']>>;
     protected supportManyToOneJoin(): boolean;
     protected supportMultipleCreate(): boolean;

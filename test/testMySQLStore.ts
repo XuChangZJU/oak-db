@@ -4,6 +4,7 @@ import { TestContext } from './Context';
 import { v4 } from 'uuid';
 import { MysqlStore } from '../src/MySQL/store';
 import { EntityDict, storageSchema } from './test-app-domain';
+import { filter } from 'lodash';
 
 describe('test mysqlstore', function () {
     this.timeout(100000);
@@ -979,18 +980,151 @@ describe('test mysqlstore', function () {
         await context.begin();
         const result = await store.aggregate('application', {
             data: {
-                $aggr: {
+                '#aggr': {
                     system: {
                         id: 1,
                     },
                 },
-                '$count-1': {
+                '#count-1': {
                     id: 1,
                 }
-            }
+            },
+            filter: {
+                systemId: {
+                    $in: [systemId1, systemId2],
+                },
+            },
         }, context, {});
         await context.commit();
-        console.log(result);
+        // console.log(result);
+        assert(result.length === 2);
+        result.forEach(
+            (row) => assert(row['#count-1'] === 2)
+        );
+    });
+
+    it('[1.9]test + aggregation', async () => {
+
+        const context = new TestContext(store);
+        await context.begin();
+
+        const systemId1 = v4();
+        const systemId2 = v4();
+        await store.operate('system', {
+            id: v4(),
+            action: 'create',
+            data: [
+                {
+                    id: systemId1,
+                    name: 'test2',
+                    description: 'aaaaa',
+                    config: {
+                        App: {},
+                    },
+                    folder: '/test2',
+                    platformId: 'platform-111',
+                    application$system: [{
+                        id: v4(),
+                        action: 'create',
+                        data: {
+                            id: v4(),
+                            name: 'test',
+                            description: 'ttttt',
+                            type: 'web',
+                            config: {
+                                type: 'web',
+                                passport: [],
+                            },
+                        }
+                    },
+                    {
+                        id: v4(),
+                        action: 'create',
+                        data: {
+                            id: v4(),
+                            name: 'test2',
+                            description: 'ttttt2',
+                            type: 'wechatMp',
+                            config: {
+                                type: 'web',
+                                passport: [],
+                            },
+                        }
+                    }]
+                },
+                {
+                    id: systemId2,
+                    name: 'test2',
+                    description: 'aaaaa',
+                    config: {
+                        App: {},
+                    },
+                    folder: '/test2',
+                    platformId: 'platform-111',
+                    application$system: [{
+                        id: v4(),
+                        action: 'create',
+                        data: {
+                            id: v4(),
+                            name: 'test',
+                            description: 'ttttt',
+                            type: 'web',
+                            config: {
+                                type: 'web',
+                                passport: [],
+                            },
+                        }
+                    },
+                    {
+                        id: v4(),
+                        action: 'create',
+                        data: {
+                            id: v4(),
+                            name: 'test2',
+                            description: 'ttttt2',
+                            type: 'wechatMp',
+                            config: {
+                                type: 'web',
+                                passport: [],
+                            },
+                        }
+                    }]
+                }
+            ]
+        } as EntityDict['system']['CreateMulti'], context, {});
+        await context.commit();
+
+        await context.begin();
+        const result = await store.select('system', {
+            data: {
+                id: 1,
+                name: 1,
+                application$system$$aggr: {
+                    $entity: 'application',
+                    data: {
+                        '#aggr': {
+                            system: {
+                                id: 1,
+                            },
+                        },
+                        '#count-1': {
+                            id: 1,
+                        }
+                    },
+                },
+            },
+            filter: {
+                id: {
+                    $in: [systemId1, systemId2],
+                },
+            },
+        }, context, {});
+        await context.commit();
+        // console.log(result);
+        assert(result.length === 2);
+        result.forEach(
+            (row) => assert(row.application$system$$aggr?.length === 1 && row.application$system$$aggr[0]['#count-1'] === 2)
+        );
     });
 
     after(() => {

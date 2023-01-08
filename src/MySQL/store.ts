@@ -46,9 +46,10 @@ export class MysqlStore<ED extends EntityDict & BaseEntityDict, Cxt extends Asyn
         this.connector = new MySqlConnector(configuration);
         this.translator = new MySqlTranslator(storageSchema);
     }
-    protected aggregateAsync<T extends keyof ED, OP extends SelectOption, Cxt extends AsyncContext<ED>>(entity: T, aggregation: ED[T]['Aggregation'], context: Cxt, option: OP): Promise<AggregationResult<ED[T]['Schema']>> {
-        const stmt = this.translator.translateAggregate(entity, aggregation, option);
-        throw new Error('not implemented yet');
+    protected async aggregateAsync<T extends keyof ED, OP extends SelectOption, Cxt extends AsyncContext<ED>>(entity: T, aggregation: ED[T]['Aggregation'], context: Cxt, option: OP): Promise<AggregationResult<ED[T]['Schema']>> {
+        const sql = this.translator.translateAggregate(entity, aggregation, option);        
+        const result = await this.connector.exec(sql, context.getCurrentTxnId());
+        return this.formResult(entity, result);
     }
     aggregate<T extends keyof ED, OP extends SelectOption>(entity: T, aggregation: ED[T]['Aggregation'], context: Cxt, option: OP): Promise<AggregationResult<ED[T]['Schema']>> {
         return this.aggregateAsync(entity, aggregation, context, option);
@@ -72,7 +73,10 @@ export class MysqlStore<ED extends EntityDict & BaseEntityDict, Cxt extends Asyn
                         r[attrHead] = {};
                     }
                     const rel = judgeRelation(schema, entity2, attrHead);
-                    if (rel === 2) {
+                    if (rel === 0) {
+                        resolveAttribute(entity2, r[attrHead], attrTail, value);
+                    }
+                    else if (rel === 2) {
                         resolveAttribute(attrHead, r[attrHead], attrTail, value);
                     }
                     else {
@@ -153,7 +157,7 @@ export class MysqlStore<ED extends EntityDict & BaseEntityDict, Cxt extends Asyn
 
 
         function removeNullObjects<E extends keyof ED>(r: Record<string, any>, e: E) {
-            assert(r.id && typeof r.id === 'string', `对象${<string>e}取数据时发现id为非法值${r.id},rowId是${r.id}`)
+            // assert(r.id && typeof r.id === 'string', `对象${<string>e}取数据时发现id为非法值${r.id},rowId是${r.id}`)
 
             for (let attr in r) {
                 const rel = judgeRelation(schema, e, attr);

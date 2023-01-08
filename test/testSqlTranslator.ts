@@ -59,12 +59,12 @@ describe('test MysqlTranslator', function() {
     it('test aggregation', () => {
         const sql = translator.translateAggregate('token', {
             data: {
-                '$max-1': {
+                '#max-1': {
                     user: {
                         nickname: 1,
                     },
                 },
-                $aggr: {
+                '#aggr': {
                     email: {
                         email: 1,
                         $$createAt$$: 1,
