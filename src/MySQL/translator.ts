@@ -103,7 +103,7 @@ export class MySqlTranslator<ED extends EntityDict> extends SqlTranslator<ED> {
         if (option?.includedDeleted) {
             return '';
         }
-        return ` \`${alias}\`.\`$$deleteAt$$\` is null`;
+        return ` (\`${alias}\`.\`$$deleteAt$$\` is null)`;
     }
     private makeUpSchema() {
         for (const entity in this.schema) {
@@ -722,7 +722,7 @@ export class MySqlTranslator<ED extends EntityDict> extends SqlTranslator<ED> {
     protected translateExpression<T extends keyof ED>(entity: T, alias: string, expression: RefOrExpression<keyof ED[T]["OpSchema"]>, refDict: Record<string, [string, keyof ED]>): string {
         const translateConstant = (constant: number | string | Date): string => {
             if (constant instanceof Date) {
-                return ` ${constant.valueOf()}`;
+                return ` from_unixtime(${constant.valueOf()}/1000)`;
             }
             else if (typeof constant === 'string') {
                 return ` '${constant}'`;
@@ -745,7 +745,7 @@ export class MySqlTranslator<ED extends EntityDict> extends SqlTranslator<ED> {
                 
                 assert(refDict[refId]);
                 const attrText = `\`${refDict[refId][0]}\`.\`${refAttr}\``;
-                result = this.translateAttrInExpression(entity, (expr)['#attr'], attrText);
+                result = this.translateAttrInExpression(entity, (expr)['#refAttr'], attrText);
             }
             else {
                 assert (k.length === 1);

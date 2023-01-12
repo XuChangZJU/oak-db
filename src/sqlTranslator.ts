@@ -655,9 +655,9 @@ export abstract class SqlTranslator<ED extends EntityDict> {
                         if (whereText) {
                             whereText += ' and '
                         }
-                        whereText + '(';
                         if (['$and', '$or', '$xor', '$not'].includes(attr)) {
                             let result = '';
+                            whereText += '(';
                             switch (attr) {
                                 case '$and':
                                 case '$or':
@@ -686,6 +686,7 @@ export abstract class SqlTranslator<ED extends EntityDict> {
                                     }
                                 }
                             }
+                            whereText += ')';
                         }
                         else if (attr.toLowerCase().startsWith(EXPRESSION_PREFIX)) {
                             // expression
@@ -705,25 +706,23 @@ export abstract class SqlTranslator<ED extends EntityDict> {
                         else {
                             const rel = judgeRelation(this.schema, entity2, attr);
                             if (rel === 2) {
-                                whereText += ` ${translateInner(attr, `${path}${attr}/`, filter2[attr])}`;
+                                whereText += ` (${translateInner(attr, `${path}${attr}/`, filter2[attr])})`;
                             }
                             else if (typeof rel === 'string') {
-                                whereText += ` ${translateInner(rel, `${path}${attr}/`, filter2[attr])}`;
+                                whereText += ` (${translateInner(rel, `${path}${attr}/`, filter2[attr])})`;
                             }
                             else {
                                 assert(attributes.hasOwnProperty(attr), `非法的属性${attr}`);
                                 const { type: type2 } = attributes[attr];
 //                                 assert (type2 !== 'ref');
                                 if (typeof filter2[attr] === 'object' && Object.keys(filter2[attr])[0] && Object.keys(filter2[attr])[0].startsWith('$')) {
-                                    whereText += ` \`${alias}\`.\`${attr}\` ${translateInner(entity2, path, filter2[attr], type2)}`
+                                    whereText += ` (\`${alias}\`.\`${attr}\` ${translateInner(entity2, path, filter2[attr], type2)})`
                                 }
                                 else {
-                                    whereText += ` \`${alias}\`.\`${attr}\` = ${this.translateAttrValue(type2, filter2[attr])}`;
+                                    whereText += ` (\`${alias}\`.\`${attr}\` = ${this.translateAttrValue(type2, filter2[attr])})`;
                                 }
                             }
                         }
-
-                        whereText + ')';
                     }
                 );
             }

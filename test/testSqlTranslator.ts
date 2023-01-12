@@ -53,8 +53,38 @@ describe('test MysqlTranslator', function() {
                 }
             },
         });
-        console.log(sql);
+        // console.log(sql);
     });
+
+    it('test expression2', () => {  
+        const sql = translator.translateSelect('token', {
+            data: {
+                id: 1,
+                $expr: {
+                    $concat: [
+                        {
+                            $year: {
+                                '#attr': '$$createAt$$',
+                            },
+                        },
+                        '-',
+                        {
+                            $month: {
+                                '#attr': '$$createAt$$',
+                            }
+                        },
+                        '-',
+                        {
+                            $dayOfMonth: {
+                                '#attr': '$$createAt$$',
+                            }
+                        }
+                    ],
+                }
+            },
+        });
+        // console.log(sql);
+    })
 
     it('test aggregation', () => {
         const sql = translator.translateAggregate('token', {
@@ -90,6 +120,35 @@ describe('test MysqlTranslator', function() {
             count: 10,
         });
         
-        console.log(sql);
-    });    
+        // console.log(sql);
+    });
+
+    it('test or', () => {
+        const sql = translator.translateSelect('token', {
+            data: {
+                id: 1,
+                $$createAt$$: 1,
+                userId: 1,
+                mobile: {
+                    id: 1,
+                    mobile: 1,
+                },
+            },
+            filter: {
+                id: 'xc',
+                $$createAt$$: 1,
+                mobile: {
+                    $or: [
+                        {
+                            id: 'mob',
+                        },
+                        {
+                            mobile: '135',
+                        }
+                    ]
+                },
+            },
+        });
+         console.log(sql);
+    })
 });
