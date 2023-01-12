@@ -557,21 +557,32 @@ export class MySqlTranslator<ED extends EntityDict> extends SqlTranslator<ED> {
     private translateFnName(fnName: string, argumentNumber: number): string {
         switch(fnName) {
             case '$add': {
-                return '%s + %s';
+                let result = '%s';
+                while (--argumentNumber > 0) {
+                    result += ' + %s';
+                }
+                return result;
             }
             case '$subtract': {
+                assert(argumentNumber === 2);
                 return '%s - %s';
             }
             case '$multiply': {
-                return '%s * %s';
+                let result = '%s';
+                while (--argumentNumber > 0) {
+                    result += ' * %s';
+                }
+                return result;
             }
             case '$divide': {
+                assert(argumentNumber === 2);
                 return '%s / %s';
             }
             case '$abs': {
                 return 'ABS(%s)';
             }
             case '$round': {
+                assert(argumentNumber === 2);
                 return 'ROUND(%s, %s)';
             }
             case '$ceil': {
@@ -581,33 +592,42 @@ export class MySqlTranslator<ED extends EntityDict> extends SqlTranslator<ED> {
                 return 'FLOOR(%s)';
             }
             case '$pow': {
+                assert(argumentNumber === 2);
                 return 'POW(%s, %s)';
             }
             case '$gt': {
+                assert(argumentNumber === 2);
                 return '%s > %s';
             }
             case '$gte': {
+                assert(argumentNumber === 2);
                 return '%s >= %s';
             }
             case '$lt': {
+                assert(argumentNumber === 2);
                 return '%s < %s';
             }
             case '$lte': {
                 return '%s <= %s';
             }
             case '$eq': {
+                assert(argumentNumber === 2);
                 return '%s = %s';
             }
             case '$ne': {
+                assert(argumentNumber === 2);
                 return '%s <> %s';
             }
             case '$startsWith': {
+                assert(argumentNumber === 2);
                 return '%s like CONCAT(%s, \'%\')';
             }
             case '$endsWith': {
+                assert(argumentNumber === 2);
                 return '%s like CONCAT(\'%\', %s)';
             }
             case '$includes': {
+                assert(argumentNumber === 2);
                 return '%s like CONCAT(\'%\', %s, \'%\')';
             }
             case '$true': {
@@ -664,12 +684,15 @@ export class MySqlTranslator<ED extends EntityDict> extends SqlTranslator<ED> {
                 return 'DAYOFYEAR(%s)';
             }
             case '$dateDiff': {
+                assert(argumentNumber === 3);
                 return 'DATEDIFF(%s, %s, %s)';
             }
             case '$contains': {
+                assert(argumentNumber === 2);
                 return 'ST_CONTAINS(%s, %s)';
             }
             case '$distance': {
+                assert(argumentNumber === 2);
                 return 'ST_DISTANCE(%s, %s)';
             }
             default: {
@@ -678,13 +701,23 @@ export class MySqlTranslator<ED extends EntityDict> extends SqlTranslator<ED> {
         }
     }
 
-    protected translateExpression<T extends keyof ED>(alias: string, expression: RefOrExpression<keyof ED[T]["OpSchema"]>, refDict: Record<string, string>): string {
+    private translateAttrInExpression<T extends keyof ED>(entity: T, attr: string, exprText: string) {
+        const { attributes } = this.schema[entity];
+        const { type } = attributes[attr];
+        if (['date', 'time', 'datetime'].includes(type)) {
+            // 从unix时间戵转成date类型参加expr的运算
+            return `from_unixtime(${exprText} / 1000)`;
+        }
+        return exprText
+    }
+
+    protected translateExpression<T extends keyof ED>(entity: T, alias: string, expression: RefOrExpression<keyof ED[T]["OpSchema"]>, refDict: Record<string, [string, keyof ED]>): string {
         const translateConstant = (constant: number | string | Date): string => {
-            if (typeof constant === 'string') {
-                return ` ${new Date(constant).valueOf()}`;
-            }
-            else if (constant instanceof Date) {
+            if (constant instanceof Date) {
                 return ` ${constant.valueOf()}`;
+            }
+            else if (typeof constant === 'string') {
+                return ` '${constant}'`;
             }
             else {
                 assert(typeof constant === 'number');
@@ -696,15 +729,15 @@ export class MySqlTranslator<ED extends EntityDict> extends SqlTranslator<ED> {
             let result: string;
             if (k.includes('#attr')) {
                 const attrText = `\`${alias}\`.\`${(expr)['#attr']}\``;
-                result = attrText;
+                result = this.translateAttrInExpression(entity, (expr)['#attr'], attrText);
             }
             else if (k.includes('#refId')) {
                 const refId = (expr)['#refId'];
                 const refAttr = (expr)['#refAttr'];
                 
                 assert(refDict[refId]);
-                const attrText = `\`${refDict[refId]}\`.\`${refAttr}\``;
-                result = attrText;
+                const attrText = `\`${refDict[refId][0]}\`.\`${refAttr}\``;
+                result = this.translateAttrInExpression(entity, (expr)['#attr'], attrText);
             }
             else {
                 assert (k.length === 1);

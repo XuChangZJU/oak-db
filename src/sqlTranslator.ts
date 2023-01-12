@@ -160,7 +160,11 @@ export abstract class SqlTranslator<ED extends EntityDict> {
         count?: number,
         option?: OP): string;
 
-    protected abstract translateExpression<T extends keyof ED>(alias: string, expression: RefOrExpression<keyof ED[T]['OpSchema']>, refDict: Record<string, string>): string;
+    protected abstract translateExpression<T extends keyof ED>(
+        entity: T,        
+        alias: string,
+        expression: RefOrExpression<keyof ED[T]['OpSchema']>,
+        refDict: Record<string, [string, keyof ED]>): string;
 
     private getStorageName<T extends keyof ED>(entity: T) {
         const { storageName } = this.schema[entity];
@@ -237,16 +241,16 @@ export abstract class SqlTranslator<ED extends EntityDict> {
         sorter?: ED[T]['Selection']['sorter'];
     }, initialNumber?: number): {
         aliasDict: Record<string, string>;
-        projectionRefAlias: Record<string, string>;
-        filterRefAlias: Record<string, string>;
+        projectionRefAlias: Record<string, [string, keyof ED]>;
+        filterRefAlias: Record<string, [string, keyof ED]>;
         from: string;
         extraWhere: string;
         currentNumber: number;
     } {
         const { schema } = this;
         let number = initialNumber || 1;
-        const projectionRefAlias: Record<string, string> = {};
-        const filterRefAlias: Record<string, string> = {};
+        const projectionRefAlias: Record<string, [string, keyof ED]> = {};
+        const filterRefAlias: Record<string, [string, keyof ED]> = {};
         let extraWhere = '';
 
         const alias = `${entity as string}_${number++}`;
@@ -280,6 +284,9 @@ export abstract class SqlTranslator<ED extends EntityDict> {
                             entityName,
                             alias,
                         })
+                    }
+                    else if (['$text'].includes(op)) {
+    
                     }
                     else {
                         const rel = judgeRelation(this.schema, entityName, op);
@@ -333,7 +340,7 @@ export abstract class SqlTranslator<ED extends EntityDict> {
             if (node!['#id']) {
                 assert(!filterRefAlias[node!['#id']]);
                 assign(filterRefAlias, {
-                    [node!['#id']]: alias,
+                    [node!['#id']]: [alias, entityName],
                 });
             }
         };
@@ -472,7 +479,7 @@ export abstract class SqlTranslator<ED extends EntityDict> {
             if (node['#id']) {
                 assert(!projectionRefAlias[node['#id']], `projection上有重复的#id定义「${node['#id']}」`);
                 assign(projectionRefAlias, {
-                    [node['#id']]: alias,
+                    [node['#id']]: [alias, entityName],
                 });
             }
         };
@@ -541,7 +548,7 @@ export abstract class SqlTranslator<ED extends EntityDict> {
         return ' is null';
     }
 
-    private translateEvaluation<T extends keyof ED>(attr: string, value: any, entity: T, alias: string, type: DataType | Ref, initialNumber: number, refAlias: Record<string, string>): {
+    private translateEvaluation<T extends keyof ED>(attr: string, value: any, entity: T, alias: string, type: DataType | Ref, initialNumber: number, refAlias: Record<string, [string, keyof ED]>): {
         stmt: string;
         currentNumber: number;
     } {
@@ -624,7 +631,7 @@ export abstract class SqlTranslator<ED extends EntityDict> {
         entity: T,
         selection: Pick<ED[T]['Selection'], 'filter'>,
         aliasDict: Record<string, string>,
-        filterRefAlias: Record<string, string>,
+        filterRefAlias: Record<string, [string, keyof ED]>,
         initialNumber: number,
         extraWhere?: string,
         option?: OP): {
@@ -682,7 +689,7 @@ export abstract class SqlTranslator<ED extends EntityDict> {
                         }
                         else if (attr.toLowerCase().startsWith(EXPRESSION_PREFIX)) {
                             // expression
-                            whereText += ` (${this.translateExpression(alias, filter2[attr], filterRefAlias)})`;
+                            whereText += ` (${this.translateExpression(entity2, alias, filter2[attr], filterRefAlias)})`;
                         }
                         else if (['$gt', '$gte', '$lt', '$lte', '$eq', '$ne', '$startsWith', '$endsWith', '$includes'].includes(attr)) {
                             whereText += this.translateComparison(attr, filter2[attr], type!);
@@ -746,7 +753,7 @@ export abstract class SqlTranslator<ED extends EntityDict> {
             const alias = aliasDict[path];
 
             if (attr.toLocaleLowerCase().startsWith(EXPRESSION_PREFIX)) {
-                return this.translateExpression(alias, sortAttr[attr] as any, {});
+                return this.translateExpression(entity2, alias, sortAttr[attr] as any, {});
             }
             else if (sortAttr[attr] === 1) {
                 return `\`${alias}\`.\`${attr}\``;
@@ -785,7 +792,7 @@ export abstract class SqlTranslator<ED extends EntityDict> {
         entity: T,
         projection: ED[T]['Selection']['data'],
         aliasDict: Record<string, string>,
-        projectionRefAlias: Record<string, string>,
+        projectionRefAlias: Record<string, [string, keyof ED]>,
         commonPrefix?: string,
         disableAs?: boolean): {
             projText: string,
@@ -812,7 +819,7 @@ export abstract class SqlTranslator<ED extends EntityDict> {
                 (attr, idx) => {
                     const prefix2 = commonPrefix ? `${commonPrefix}.${prefix}` : prefix;
                     if (attr.toLowerCase().startsWith(EXPRESSION_PREFIX)) {
-                        const exprText = this.translateExpression(alias, projection2[attr], projectionRefAlias);
+                        const exprText = this.translateExpression(entity2, alias, projection2[attr], projectionRefAlias);
                         if (disableAs) {
                             projText += ` ${exprText}`;
                         }
@@ -882,7 +889,7 @@ export abstract class SqlTranslator<ED extends EntityDict> {
         };
     }
 
-    private translateSelectInner<T extends keyof ED, OP extends SqlSelectOption>(entity: T, selection: ED[T]['Selection'], initialNumber: number, refAlias: Record<string, string>, option?: OP): {
+    private translateSelectInner<T extends keyof ED, OP extends SqlSelectOption>(entity: T, selection: ED[T]['Selection'], initialNumber: number, refAlias: Record<string, [string, keyof ED]>, option?: OP): {
         stmt: string;
         currentNumber: number;
     } {
