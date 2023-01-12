@@ -695,6 +695,14 @@ export class MySqlTranslator<ED extends EntityDict> extends SqlTranslator<ED> {
                 assert(argumentNumber === 2);
                 return 'ST_DISTANCE(%s, %s)';
             }
+            case '$concat': {
+                let result = ' concat(%s';
+                while (--argumentNumber > 0) {
+                    result += ', %s';
+                }
+                result += ')';
+                return result;
+            }
             default: {
                 throw new Error(`unrecoganized function ${fnName}`);
             }
