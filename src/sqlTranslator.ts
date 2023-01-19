@@ -1,6 +1,6 @@
 import assert from 'assert';
 import { assign, cloneDeep, intersection, keys, set } from 'lodash';
-import { Attribute, DeduceCreateOperationData, DeduceSorterAttr, DeduceSorterItem, EntityDict, Expression, EXPRESSION_PREFIX, Index, OperateOption, Q_FullTextValue, Ref, RefOrExpression, SelectOption, StorageSchema } from "oak-domain/lib/types";
+import { Attribute, EntityDict, EXPRESSION_PREFIX, Index, OperateOption, Q_FullTextValue, Ref, RefOrExpression, SelectOption, StorageSchema } from "oak-domain/lib/types";
 import { DataType } from "oak-domain/lib/types/schema/DataTypes";
 import { judgeRelation } from 'oak-domain/lib/store/relation';
 
@@ -171,7 +171,7 @@ export abstract class SqlTranslator<ED extends EntityDict> {
         return (storageName || entity) as string;
     }
 
-    translateInsert<T extends keyof ED>(entity: T, data: DeduceCreateOperationData<ED[T]['OpSchema']>[]): string {
+    translateInsert<T extends keyof ED>(entity: T, data: ED[T]['CreateMulti']['data']): string {
         const { schema } = this;
         const { attributes, storageName = entity } = schema[entity];
 
@@ -354,7 +354,7 @@ export abstract class SqlTranslator<ED extends EntityDict> {
         }
 
         const analyzeSortNode = <E extends keyof ED>({ node, path, entityName, alias }: {
-            node: DeduceSorterAttr<ED[E]['Schema']>;
+            node: NonNullable<ED[E]['Selection']['sorter']>[number]['$attr'];
             path: string;
             entityName: E;
             alias: string;
@@ -746,7 +746,7 @@ export abstract class SqlTranslator<ED extends EntityDict> {
     }
 
     private translateSorter<T extends keyof ED>(entity: T, sorter: ED[T]['Selection']['sorter'], aliasDict: Record<string, string>): string {
-        const translateInner = <E extends keyof ED>(entity2: E, sortAttr: DeduceSorterAttr<ED[E]['Schema']>, path: string): string => {
+        const translateInner = <E extends keyof ED>(entity2: E, sortAttr: NonNullable<ED[E]['Selection']['sorter']>[number]['$attr'], path: string): string => {
             assert(Object.keys(sortAttr).length === 1);
             const attr = Object.keys(sortAttr)[0];
             const alias = aliasDict[path];

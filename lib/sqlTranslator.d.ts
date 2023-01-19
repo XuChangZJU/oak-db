@@ -1,4 +1,4 @@
-import { DeduceCreateOperationData, EntityDict, OperateOption, Q_FullTextValue, Ref, RefOrExpression, SelectOption, StorageSchema } from "oak-domain/lib/types";
+import { EntityDict, OperateOption, Q_FullTextValue, Ref, RefOrExpression, SelectOption, StorageSchema } from "oak-domain/lib/types";
 import { DataType } from "oak-domain/lib/types/schema/DataTypes";
 export interface SqlSelectOption extends SelectOption {
 }
@@ -20,7 +20,7 @@ export declare abstract class SqlTranslator<ED extends EntityDict> {
     protected abstract populateRemoveStmt<OP extends SqlOperateOption>(removeText: string, fromText: string, aliasDict: Record<string, string>, filterText: string, sorterText?: string, indexFrom?: number, count?: number, option?: OP): string;
     protected abstract translateExpression<T extends keyof ED>(entity: T, alias: string, expression: RefOrExpression<keyof ED[T]['OpSchema']>, refDict: Record<string, [string, keyof ED]>): string;
     private getStorageName;
-    translateInsert<T extends keyof ED>(entity: T, data: DeduceCreateOperationData<ED[T]['OpSchema']>[]): string;
+    translateInsert<T extends keyof ED>(entity: T, data: ED[T]['CreateMulti']['data']): string;
     /**
      * analyze the join relations in projection/query/sort
      * 所有的层次关系都当成left join处理，如果有内表为空的情况，请手动处理

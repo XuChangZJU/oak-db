@@ -1,6 +1,5 @@
 import { reinforceSelection } from 'oak-domain/lib/store/selection';
-import { EntityDict, DeduceCreateSingleOperation, DeduceRemoveOperation, DeduceUpdateOperation, OperateOption,
-    OperationResult, TxnOption, StorageSchema, DeduceCreateMultipleOperation, SelectOption, AggregationResult } from 'oak-domain/lib/types';
+import { EntityDict, OperateOption, OperationResult, TxnOption, StorageSchema, SelectOption, AggregationResult } from 'oak-domain/lib/types';
 import { EntityDict as BaseEntityDict } from 'oak-domain/lib/base-app-domain';
 import { CascadeStore } from 'oak-domain/lib/store/CascadeStore';
 import { MySQLConfiguration } from './types/Configuration';
@@ -216,7 +215,7 @@ export class MysqlStore<ED extends EntityDict & BaseEntityDict, Cxt extends Asyn
     }
     protected async updateAbjointRowAsync<T extends keyof ED>(
         entity: T,
-        operation: DeduceCreateMultipleOperation<ED[T]['Schema']> | DeduceCreateSingleOperation<ED[T]['Schema']> | DeduceUpdateOperation<ED[T]['Schema']> | DeduceRemoveOperation<ED[T]['Schema']>,
+        operation: ED[T]['Operation'],
         context: AsyncContext<ED>,
         option?: MysqlOperateOption
     ): Promise<number> {
@@ -226,7 +225,7 @@ export class MysqlStore<ED extends EntityDict & BaseEntityDict, Cxt extends Asyn
 
         switch (action) {
             case 'create': {
-                const { data } = operation as DeduceCreateMultipleOperation<ED[T]['Schema']> | DeduceCreateSingleOperation<ED[T]['Schema']>;
+                const { data } = operation as ED[T]['Create'];
                 const sql = translator.translateInsert(entity, data instanceof Array ? data : [data]);
                 await connector.exec(sql, txn);
                 if (!option?.dontCollect) {

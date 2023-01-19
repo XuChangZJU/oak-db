@@ -1,4 +1,4 @@
-import { EntityDict, DeduceCreateSingleOperation, DeduceRemoveOperation, DeduceUpdateOperation, OperateOption, OperationResult, TxnOption, StorageSchema, DeduceCreateMultipleOperation, SelectOption, AggregationResult } from 'oak-domain/lib/types';
+import { EntityDict, OperateOption, OperationResult, TxnOption, StorageSchema, SelectOption, AggregationResult } from 'oak-domain/lib/types';
 import { EntityDict as BaseEntityDict } from 'oak-domain/lib/base-app-domain';
 import { CascadeStore } from 'oak-domain/lib/store/CascadeStore';
 import { MySQLConfiguration } from './types/Configuration';
@@ -19,7 +19,7 @@ export declare class MysqlStore<ED extends EntityDict & BaseEntityDict, Cxt exte
     protected supportMultipleCreate(): boolean;
     private formResult;
     protected selectAbjointRowAsync<T extends keyof ED>(entity: T, selection: ED[T]['Selection'], context: AsyncContext<ED>, option?: MySqlSelectOption): Promise<Partial<ED[T]['Schema']>[]>;
-    protected updateAbjointRowAsync<T extends keyof ED>(entity: T, operation: DeduceCreateMultipleOperation<ED[T]['Schema']> | DeduceCreateSingleOperation<ED[T]['Schema']> | DeduceUpdateOperation<ED[T]['Schema']> | DeduceRemoveOperation<ED[T]['Schema']>, context: AsyncContext<ED>, option?: MysqlOperateOption): Promise<number>;
+    protected updateAbjointRowAsync<T extends keyof ED>(entity: T, operation: ED[T]['Operation'], context: AsyncContext<ED>, option?: MysqlOperateOption): Promise<number>;
     operate<T extends keyof ED>(entity: T, operation: ED[T]['Operation'], context: Cxt, option: OperateOption): Promise<OperationResult<ED>>;
     select<T extends keyof ED>(entity: T, selection: ED[T]['Selection'], context: Cxt, option: SelectOption): Promise<Partial<ED[T]['Schema']>[]>;
     count<T extends keyof ED>(entity: T, selection: Pick<ED[T]['Selection'], 'filter' | 'count'>, context: Cxt, option: SelectOption): Promise<number>;
