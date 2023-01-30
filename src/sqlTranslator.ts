@@ -53,33 +53,41 @@ export abstract class SqlTranslator<ED extends EntityDict> {
             // 增加默认的索引
             const intrinsticIndexes: Index<ED[keyof ED]['OpSchema']>[] = [
                 {
-                    name: `${entity}_create_at`,
+                    name: `${entity}_create_at_auto_create`,
                     attributes: [{
                         name: '$$createAt$$',
+                    }, {
+                        name: '$$deleteAt$$',
                     }]
                 }, {
-                    name: `${entity}_update_at`,
+                    name: `${entity}_update_at_auto_create`,
                     attributes: [{
                         name: '$$updateAt$$',
+                    }, {
+                        name: '$$deleteAt$$',
                     }],
                 }, {
-                    name: `${entity}_trigger_ts`,
+                    name: `${entity}_trigger_ts_auto_create`,
                     attributes: [{
                         name: '$$triggerTimestamp$$',
+                    }, {
+                        name: '$$deleteAt$$',
                     }],
                 }
             ];
 
-            // 增加外键上的索引
+            // 增加外键等相关属性上的索引
             for (const attr in attributes) {
                 if (attributes[attr].type === 'ref') {
                     if (!(indexes?.find(
                         ele => ele.attributes[0].name === attr
                     ))) {
                         intrinsticIndexes.push({
-                            name: `${entity}_fk_${attr}`,
+                            name: `${entity}_fk_${attr}_auto_create`,
                             attributes: [{
                                 name: attr,
+                            }, {
+                                name: '$$deleteAt$$',
                             }]
                         });
                     }
@@ -92,11 +100,48 @@ export abstract class SqlTranslator<ED extends EntityDict> {
                             ele => ele.attributes[0].name === 'entity' && ele.attributes[1]?.name === 'entityId'
                         ))) {
                             intrinsticIndexes.push({
-                                name: `${entity}_fk_entity_entityId`,
+                                name: `${entity}_fk_entity_entityId_auto_create`,
                                 attributes: [{
                                     name: 'entity',
                                 }, {
                                     name: 'entityId',
+                                }, {
+                                    name: '$$deleteAt$$',
+                                }]
+                            });
+                        }
+                    }
+                }
+
+                if (attr.endsWith('State') && attributes[attr].type === 'varchar') {
+                    if (!(indexes?.find(
+                        ele => ele.attributes[0].name === attr
+                    ))) {
+                        intrinsticIndexes.push({
+                            name: `${entity}_attr_auto_create`,
+                            attributes: [{
+                                name: attr,
+                            }, {
+                                name: '$$deleteAt$$',
+                            }]
+                        });
+                    }
+                }
+
+                if (attr === 'expired' && attributes[attr].type === 'boolean') {
+                    const expiresAtDef = attributes.expiresAt;
+                    if (expiresAtDef?.type === 'datetime') {
+                        if (!(indexes?.find(
+                            ele => ele.attributes[0].name === 'expired' && ele.attributes[1]?.name === 'expiresAt'
+                        ))) {
+                            intrinsticIndexes.push({
+                                name: `${entity}_expires_expiredAt_auto_create`,
+                                attributes: [{
+                                    name: 'expired',
+                                }, {
+                                    name: 'expiresAt',
+                                }, {
+                                    name: '$$deleteAt$$',
                                 }]
                             });
                         }
