@@ -1064,7 +1064,7 @@ export abstract class SqlTranslator<ED extends EntityDict> {
             if (updateText) {
                 updateText += ',';
             }
-            assert(attributes.hasOwnProperty(attr) && attributes[attr].type !== 'ref');
+            assert(attributes.hasOwnProperty(attr));
             const value = this.translateAttrValue(attributes[attr].type as DataType, data[attr]);
             updateText += `\`${alias}\`.\`${attr}\` = ${value}`;
         }
