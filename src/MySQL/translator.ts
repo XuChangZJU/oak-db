@@ -494,10 +494,11 @@ export class MySqlTranslator<ED extends EntityDict> extends SqlTranslator<ED> {
                 indexes.forEach(
                     ({ name, attributes, config }, idx) => {
                         const { unique, type, parser } = config || {};
-                        if (unique) {
+                        // 因为有deleteAt的存在，这里的unique没意义，只能框架自己去建立checker来处理
+                        /* if (unique) {
                             sql += ' unique ';
                         }
-                        else if (type === 'fulltext') {
+                        else */ if (type === 'fulltext') {
                             sql += ' fulltext ';
                         }
                         else if (type === 'spatial') {
