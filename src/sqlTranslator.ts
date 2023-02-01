@@ -118,7 +118,7 @@ export abstract class SqlTranslator<ED extends EntityDict> {
                         ele => ele.attributes[0].name === attr
                     ))) {
                         intrinsticIndexes.push({
-                            name: `${entity}_attr_auto_create`,
+                            name: `${entity}_${attr}_auto_create`,
                             attributes: [{
                                 name: attr,
                             }, {
