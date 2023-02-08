@@ -1,4 +1,3 @@
-import { reinforceSelection } from 'oak-domain/lib/store/selection';
 import { EntityDict, OperateOption, OperationResult, TxnOption, StorageSchema, SelectOption, AggregationResult } from 'oak-domain/lib/types';
 import { EntityDict as BaseEntityDict } from 'oak-domain/lib/base-app-domain';
 import { CascadeStore } from 'oak-domain/lib/store/CascadeStore';
@@ -275,7 +274,6 @@ export class MysqlStore<ED extends EntityDict & BaseEntityDict, Cxt extends Asyn
         return await this.cascadeUpdateAsync(entity, operation as any, context, option);
     }
     async select<T extends keyof ED>(entity: T, selection: ED[T]['Selection'], context: Cxt, option: SelectOption): Promise<Partial<ED[T]['Schema']>[]> {
-        reinforceSelection(this.storageSchema, entity, selection);
         const result = await this.cascadeSelectAsync(entity, selection, context, option);
         return result;
     }
