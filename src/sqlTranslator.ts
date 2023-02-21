@@ -614,7 +614,7 @@ export abstract class SqlTranslator<ED extends EntityDict> {
                 if (value instanceof Array) {
                     const values = value.map(
                         (v) => {
-                            if (['varchar', 'char', 'text', 'nvarchar', 'ref'].includes(type as string)) {
+                            if (['varchar', 'char', 'text', 'nvarchar', 'ref', 'enum'].includes(type as string)) {
                                 return `'${v}'`;
                             }
                             else {

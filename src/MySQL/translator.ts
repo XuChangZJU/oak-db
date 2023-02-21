@@ -296,7 +296,7 @@ export class MySqlTranslator<ED extends EntityDict> extends SqlTranslator<ED> {
     };
 
     maxAliasLength = 63;
-    private populateDataTypeDef(type: DataType | Ref, params?: DataTypeParams): string{
+    private populateDataTypeDef(type: DataType | Ref, params?: DataTypeParams, enumeration?: string[]): string{
         if (['date', 'datetime', 'time', 'sequence'].includes(type)) {
             return 'bigint ';
         }
@@ -305,9 +305,13 @@ export class MySqlTranslator<ED extends EntityDict> extends SqlTranslator<ED> {
         }
         if (['image', 'function'].includes(type)) {
             return 'text ';
-        }        
+        }
         if (type === 'ref') {
             return 'char(36)';
+        }
+        if (type === 'enum') {
+            assert(enumeration);
+            return `enum(${enumeration.map(ele => `'${ele}'`).join(',')})`;
         }
 
         if (MySqlTranslator.withLengthDataTypes.includes(type as DataType)) {
@@ -458,9 +462,10 @@ export class MySqlTranslator<ED extends EntityDict> extends SqlTranslator<ED> {
                         unique,
                         notNull,
                         sequenceStart,
+                        enumeration,
                     } = attrDef;
                     sql += `\`${attr}\` `
-                    sql += this.populateDataTypeDef(type, params) as string;
+                    sql += this.populateDataTypeDef(type, params, enumeration) as string;
 
                     if (notNull || type === 'geometry') {
                         sql += ' not null ';
@@ -717,7 +722,7 @@ export class MySqlTranslator<ED extends EntityDict> extends SqlTranslator<ED> {
             // 从unix时间戵转成date类型参加expr的运算
             return `from_unixtime(${exprText} / 1000)`;
         }
-        return exprText
+        return exprText;
     }
 
     protected translateExpression<T extends keyof ED>(entity: T, alias: string, expression: RefOrExpression<keyof ED[T]["OpSchema"]>, refDict: Record<string, [string, keyof ED]>): string {
