@@ -309,6 +309,9 @@ export class MySqlTranslator<ED extends EntityDict> extends SqlTranslator<ED> {
         if (type === 'ref') {
             return 'char(36)';
         }
+        if (type === 'money') {
+            return 'bigint';
+        }
         if (type === 'enum') {
             assert(enumeration);
             return `enum(${enumeration.map(ele => `'${ele}'`).join(',')})`;
