@@ -846,7 +846,7 @@ export class MySqlTranslator<ED extends EntityDict> extends SqlTranslator<ED> {
         // todo using index
         const alias = aliasDict['./'];
         if (option?.deletePhysically) {
-            let sql = `delete from ${fromText} `;
+            let sql = `delete ${alias} from ${fromText} `;
             if (filterText) {
                 sql += ` where ${filterText}`;
             }
