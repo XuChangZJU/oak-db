@@ -296,7 +296,7 @@ export class MySqlTranslator<ED extends EntityDict> extends SqlTranslator<ED> {
     };
 
     maxAliasLength = 63;
-    private populateDataTypeDef(type: DataType | Ref, params?: DataTypeParams, enumeration?: string[]): string{
+    private populateDataTypeDef(type: DataType | Ref, params?: DataTypeParams, enumeration?: string[]): string {
         if (['date', 'datetime', 'time', 'sequence'].includes(type)) {
             return 'bigint ';
         }
@@ -348,7 +348,7 @@ export class MySqlTranslator<ED extends EntityDict> extends SqlTranslator<ED> {
         if (MySqlTranslator.withWidthDataTypes.includes(type as DataType)) {
             assert(type === 'int');
             const { width } = params!;
-            switch(width!) {
+            switch (width!) {
                 case 1: {
                     return 'tinyint';
                 }
@@ -371,13 +371,13 @@ export class MySqlTranslator<ED extends EntityDict> extends SqlTranslator<ED> {
     }
 
     protected translateAttrProjection(dataType: DataType, alias: string, attr: string): string {
-        switch(dataType) {
+        switch (dataType) {
             case 'geometry': {
                 return ` st_astext(\`${alias}\`.\`${attr}\`)`;
             }
-            default:{
+            default: {
                 return ` \`${alias}\`.\`${attr}\``;
-            }            
+            }
         }
     }
 
@@ -481,7 +481,7 @@ export class MySqlTranslator<ED extends EntityDict> extends SqlTranslator<ED> {
                             throw new Error(`「${entity as string}」只能有一个sequence列`);
                         }
                         hasSequence = sequenceStart;
-                        sql += ' auto_increment unique ';                        
+                        sql += ' auto_increment unique ';
                     }
                     if (defaultValue !== undefined) {
                         assert(type !== 'ref');
@@ -550,13 +550,13 @@ export class MySqlTranslator<ED extends EntityDict> extends SqlTranslator<ED> {
                 );
             }
         }
-        
-        
+
+
         sql += ')';
         if (typeof hasSequence === 'number') {
             sql += `auto_increment = ${hasSequence}`;
         }
-        
+
         if (!replace) {
             return [sql];
         }
@@ -564,7 +564,7 @@ export class MySqlTranslator<ED extends EntityDict> extends SqlTranslator<ED> {
     }
 
     private translateFnName(fnName: string, argumentNumber: number): string {
-        switch(fnName) {
+        switch (fnName) {
             case '$add': {
                 let result = '%s';
                 while (--argumentNumber > 0) {
@@ -647,7 +647,7 @@ export class MySqlTranslator<ED extends EntityDict> extends SqlTranslator<ED> {
             }
             case '$and': {
                 let result = '';
-                for (let iter = 0; iter < argumentNumber; iter ++) {
+                for (let iter = 0; iter < argumentNumber; iter++) {
                     result += '%s';
                     if (iter < argumentNumber - 1) {
                         result += ' and ';
@@ -657,7 +657,7 @@ export class MySqlTranslator<ED extends EntityDict> extends SqlTranslator<ED> {
             }
             case '$or': {
                 let result = '';
-                for (let iter = 0; iter < argumentNumber; iter ++) {
+                for (let iter = 0; iter < argumentNumber; iter++) {
                     result += '%s';
                     if (iter < argumentNumber - 1) {
                         result += ' or ';
@@ -751,13 +751,13 @@ export class MySqlTranslator<ED extends EntityDict> extends SqlTranslator<ED> {
             else if (k.includes('#refId')) {
                 const refId = (expr)['#refId'];
                 const refAttr = (expr)['#refAttr'];
-                
+
                 assert(refDict[refId]);
                 const attrText = `\`${refDict[refId][0]}\`.\`${refAttr}\``;
                 result = this.translateAttrInExpression(entity, (expr)['#refAttr'], attrText);
             }
             else {
-                assert (k.length === 1);
+                assert(k.length === 1);
                 if ((expr)[k[0]] instanceof Array) {
                     const fnName = this.translateFnName(k[0], (expr)[k[0]].length);
                     const args = [fnName];
@@ -792,7 +792,7 @@ export class MySqlTranslator<ED extends EntityDict> extends SqlTranslator<ED> {
         };
 
         return translateInner(expression);
-    }    
+    }
 
     protected populateSelectStmt<T extends keyof ED>(
         projectionText: string,
@@ -816,7 +816,7 @@ export class MySqlTranslator<ED extends EntityDict> extends SqlTranslator<ED> {
             sql += ` group by ${groupByText}`;
         }
         if (typeof indexFrom === 'number') {
-            assert (typeof count === 'number');
+            assert(typeof count === 'number');
             sql += ` limit ${indexFrom}, ${count}`;
         }
         if (option?.forUpdate) {
@@ -836,7 +836,7 @@ export class MySqlTranslator<ED extends EntityDict> extends SqlTranslator<ED> {
             sql += ` order by ${sorterText}`;
         }
         if (typeof indexFrom === 'number') {
-            assert (typeof count === 'number');
+            assert(typeof count === 'number');
             sql += ` limit ${indexFrom}, ${count}`;
         }
 
@@ -845,6 +845,21 @@ export class MySqlTranslator<ED extends EntityDict> extends SqlTranslator<ED> {
     protected populateRemoveStmt(removeText: string, fromText: string, aliasDict: Record<string, string>, filterText: string, sorterText?: string, indexFrom?: number, count?: number, option?: MysqlOperateOption): string {
         // todo using index
         const alias = aliasDict['./'];
+        if (option?.deletePhysically) {
+            let sql = `delete from ${fromText} `;
+            if (filterText) {
+                sql += ` where ${filterText}`;
+            }
+            if (sorterText) {
+                sql += ` order by ${sorterText}`;
+            }
+            if (typeof indexFrom === 'number') {
+                assert(typeof count === 'number');
+                sql += ` limit ${indexFrom}, ${count}`;
+            }
+
+            return sql;
+        }
         const now = Date.now();
         let sql = `update ${fromText} set \`${alias}\`.\`$$deleteAt$$\` = '${now}'`;
         if (filterText) {
@@ -854,7 +869,7 @@ export class MySqlTranslator<ED extends EntityDict> extends SqlTranslator<ED> {
             sql += ` order by ${sorterText}`;
         }
         if (typeof indexFrom === 'number') {
-            assert (typeof count === 'number');
+            assert(typeof count === 'number');
             sql += ` limit ${indexFrom}, ${count}`;
         }
 

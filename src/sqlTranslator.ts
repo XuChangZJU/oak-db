@@ -934,6 +934,7 @@ export abstract class SqlTranslator<ED extends EntityDict> {
     }
 
     private translateSelectInner<T extends keyof ED, OP extends SqlSelectOption>(entity: T, selection: ED[T]['Selection'], initialNumber: number, refAlias: Record<string, [string, keyof ED]>, option?: OP): {
+        filterStmt: string;
         stmt: string;
         currentNumber: number;
     } {
@@ -955,6 +956,7 @@ export abstract class SqlTranslator<ED extends EntityDict> {
         return {
             stmt: this.populateSelectStmt(projText, fromText, aliasDict, filterText, sorterText, undefined, indexFrom, count, option, selection),
             currentNumber: currentNumber2,
+            filterStmt: filterText,
         };
     }
 
@@ -963,6 +965,10 @@ export abstract class SqlTranslator<ED extends EntityDict> {
         return stmt;
     }
 
+    translateWhere<T extends keyof ED, OP extends SqlSelectOption>(entity: T, selection: ED[T]['Selection'], option?: OP): string {
+        const { filterStmt } = this.translateSelectInner(entity, selection, 1, {}, option);
+        return filterStmt;
+    }
 
     translateAggregate<T extends keyof ED, OP extends SqlSelectOption>(entity: T, aggregation: ED[T]['Aggregation'], option?: OP): string {
         const { data, filter, sorter, indexFrom, count } = aggregation;
