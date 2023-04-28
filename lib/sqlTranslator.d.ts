@@ -1,20 +1,23 @@
 import { EntityDict, OperateOption, Q_FullTextValue, Ref, RefOrExpression, SelectOption, StorageSchema } from "oak-domain/lib/types";
+import { EntityDict as BaseEntityDict } from 'oak-domain/lib/base-app-domain';
 import { DataType } from "oak-domain/lib/types/schema/DataTypes";
 export interface SqlSelectOption extends SelectOption {
 }
 export interface SqlOperateOption extends OperateOption {
 }
-export declare abstract class SqlTranslator<ED extends EntityDict> {
+export declare abstract class SqlTranslator<ED extends EntityDict & BaseEntityDict> {
     readonly schema: StorageSchema<ED>;
     constructor(schema: StorageSchema<ED>);
     private makeFullSchema;
     protected abstract getDefaultSelectFilter<OP extends SqlSelectOption>(alias: string, option?: OP): string;
     protected abstract translateAttrProjection(dataType: DataType, alias: string, attr: string): string;
+    protected abstract translateObjectProjection(projection: Record<string, any>, alias: string, attr: string, prefix: string): string;
     protected abstract translateAttrValue(dataType: DataType | Ref, value: any): string;
     protected abstract translateFullTextSearch<T extends keyof ED>(value: Q_FullTextValue, entity: T, alias: string): string;
     abstract translateCreateEntity<T extends keyof ED>(entity: T, option: {
         replace?: boolean;
     }): string[];
+    protected abstract translateObjectPredicate(predicate: Record<string, any>, alias: string, attr: string): string;
     protected abstract populateSelectStmt<T extends keyof ED, OP extends SqlSelectOption>(projectionText: string, fromText: string, aliasDict: Record<string, string>, filterText: string, sorterText?: string, groupByText?: string, indexFrom?: number, count?: number, option?: OP, selection?: ED[T]['Selection'], aggregation?: ED[T]['Aggregation']): string;
     protected abstract populateUpdateStmt<OP extends SqlOperateOption>(updateText: string, fromText: string, aliasDict: Record<string, string>, filterText: string, sorterText?: string, indexFrom?: number, count?: number, option?: OP): string;
     protected abstract populateRemoveStmt<OP extends SqlOperateOption>(removeText: string, fromText: string, aliasDict: Record<string, string>, filterText: string, sorterText?: string, indexFrom?: number, count?: number, option?: OP): string;
@@ -36,8 +39,8 @@ export declare abstract class SqlTranslator<ED extends EntityDict> {
      */
     private analyzeJoin;
     private translateComparison;
-    private translateElement;
     private translateEvaluation;
+    protected translatePredicate(predicate: string, value: any, type?: DataType | Ref): string;
     private translateFilter;
     private translateSorter;
     private translateProjection;

@@ -28,6 +28,7 @@
 		"@types/mocha": "^9.1.1",
 		"@types/node": "^17.0.42",
 		"@types/uuid": "^8.3.4",
+		"cross-env": "^7.0.3",
 		"mocha": "^10.0.0",
 		"oak-general-business": "file:../oak-general-business",
 		"ts-node": "~10.9.1",

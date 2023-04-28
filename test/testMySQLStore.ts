@@ -5,6 +5,7 @@ import { v4 } from 'uuid';
 import { MysqlStore } from '../src/MySQL/store';
 import { EntityDict, storageSchema } from './test-app-domain';
 import { filter } from 'lodash';
+import { generateNewIdAsync } from 'oak-domain/lib/utils/uuid';
 
 describe('test mysqlstore', function () {
     this.timeout(100000);
@@ -201,6 +202,7 @@ describe('test mysqlstore', function () {
             },
             data: {
                 ref: {
+                    id: await generateNewIdAsync(),
                     action: 'remove',
                     data: {},
                 }
@@ -1125,6 +1127,257 @@ describe('test mysqlstore', function () {
         result.forEach(
             (row) => assert(row.application$system$$aggr?.length === 1 && row.application$system$$aggr[0]['#count-1'] === 2)
         );
+    });
+
+    it('[1.10]json insert/select', async() => {
+        const context = new TestContext(store);
+        await context.begin();
+
+        await context.operate('application', {
+            id: await generateNewIdAsync(),
+            action: 'create',
+            data: {
+                id: await generateNewIdAsync(),
+                name: 'xuchang',
+                description: 'tt',
+                type: 'web',
+                systemId: 'system',
+                config: {
+                    type: 'web',
+                    passport: ['email', 'mobile'],
+                },
+            }
+        }, {});
+
+        const result = await context.select('application', {
+            data: {
+                id: 1,
+                name: 1,
+                config: {
+                    passport: [undefined, 1],
+                    wechat: {
+                        appId: 1,
+                    }
+                },
+            }
+        }, {});
+        console.log(JSON.stringify(result));
+    });
+
+    it('[1.11]json as filter', async() => {
+        const context = new TestContext(store);
+        await context.begin();
+
+        const id = await generateNewIdAsync();
+        await store.operate('oper', {
+            id: await generateNewIdAsync(),
+            action: 'create',
+            data: {
+                id,
+                action: 'test',
+                data: {
+                    name: 'xc',
+                    books: [{
+                        title: 'mathmatics',
+                        price: 1,
+                    }, {
+                        title: 'english',
+                        price: 2,
+                    }]
+                },
+                targetEntity: 'bbb',
+            }
+        }, context, {});
+
+        const row = await store.select('oper', {
+            data: {
+                id: 1,
+                data: {
+                    name: 1,
+                    books: [undefined, {
+                        title: 1,
+                        price: 1,
+                    }],
+                },
+            },
+            filter: {
+                id,
+                data: {
+                    name: 'xc',
+                }
+            }
+        }, context, {});
+        const row2 = await store.select('oper', {
+            data: {
+                id: 1,
+                data: {
+                    name: 1,
+                    books: [undefined, {
+                        title: 1,
+                        price: 1,
+                    }],
+                },
+            },
+            filter: {
+                id,
+                data: {
+                    name: 'xc2',
+                }
+            }
+        }, context, {});
+
+        await context.commit();
+        // console.log(JSON.stringify(row));
+        assert (row.length === 1, JSON.stringify(row));
+        assert (row2.length === 0, JSON.stringify(row2));
+    });
+
+    it('[1.12]complicated json filter', async() => {
+        const context = new TestContext(store);
+        await context.begin();
+
+        const id = await generateNewIdAsync();
+        await store.operate('oper', {
+            id: await generateNewIdAsync(),
+            action: 'create',
+            data: {
+                id,
+                action: 'test',
+                data: {
+                    name: 'xcc',
+                    price: [100, 400, 1000],
+                },
+                targetEntity: 'bbb',
+            }
+        }, context, {});
+
+        const row = await store.select('oper', {
+            data: {
+                id: 1,
+                data: {
+                    name: 1,
+                    price: 1,
+                },
+            },
+            filter: {
+                data: {
+                    price: [undefined, 400],
+                }
+            }
+        }, context, {});
+
+        const row2 = await store.select('oper', {
+            data: {
+                id: 1,
+                data: {
+                    name: 1,
+                    price: 1,
+                },
+            },
+            filter: {
+                data: {
+                    price: [undefined, 200],
+                }
+            }
+        }, context, {});
+
+        const row3 = await store.select('oper', {
+            data: {
+                id: 1,
+                data: {
+                    name: 1,
+                    price: 1,
+                },
+            },
+            filter: {
+                data: {
+                    price: [undefined, {
+                        $gt: 300,
+                    }],
+                }
+            }
+        }, context, {});
+
+        const row4 = await store.select('oper', {
+            data: {
+                id: 1,
+                data: {
+                    name: 1,
+                    price: 1,
+                },
+            },
+            filter: {
+                data: {
+                    price: {
+                        $contains: [200, 500],
+                    },
+                }
+            }
+        }, context, {});
+
+        const row5 = await store.select('oper', {
+            data: {
+                id: 1,
+                data: {
+                    name: 1,
+                    price: 1,
+                },
+            },
+            filter: {
+                data: {
+                    price: {
+                        $contains: [100, 400],
+                    },
+                }
+            }
+        }, context, {});
+
+        const row6 = await store.select('oper', {
+            data: {
+                id: 1,
+                data: {
+                    name: 1,
+                    price: 1,
+                },
+            },
+            filter: {
+                data: {
+                    price: {
+                        $contains: ['xc'],
+                    },
+                }
+            }
+        }, context, {});
+
+        const row7 = await store.select('oper', {
+            data: {
+                id: 1,
+                data: {
+                    name: 1,
+                    price: 1,
+                },
+            },
+            filter: {
+                data: {
+                    name: {
+                        $includes: 'xc',
+                    },
+                    price: {
+                        $overlaps: [200, 400, 800],
+                    },
+                }
+            }
+        }, context, {});
+
+        await context.commit();
+        assert(row.length === 1);
+        assert(row2.length === 0);
+        assert(row3.length === 1);
+        assert(row4.length === 0);
+        assert(row5.length === 1);
+        assert(row6.length === 0);
+        assert(row7.length === 1);
+        // console.log(JSON.stringify(row7));
     });
 
     after(() => {

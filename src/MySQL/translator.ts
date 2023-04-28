@@ -2,6 +2,7 @@ import assert from 'assert';
 import { format } from 'util';
 import { assign } from 'lodash';
 import { EntityDict, Geo, Q_FullTextValue, RefOrExpression, Ref, StorageSchema, Index, RefAttr } from "oak-domain/lib/types";
+import { EntityDict as BaseEntityDict } from 'oak-domain/lib/base-app-domain';
 import { DataType, DataTypeParams } from "oak-domain/lib/types/schema/DataTypes";
 import { SqlOperateOption, SqlSelectOption, SqlTranslator } from "../sqlTranslator";
 import { isDateExpression } from 'oak-domain/lib/types/Expression';
@@ -98,7 +99,7 @@ export interface MysqlOperateOption extends SqlOperateOption {
 
 }
 
-export class MySqlTranslator<ED extends EntityDict> extends SqlTranslator<ED> {
+export class MySqlTranslator<ED extends EntityDict & BaseEntityDict> extends SqlTranslator<ED> {
     protected getDefaultSelectFilter(alias: string, option?: MySqlSelectOption): string {
         if (option?.includedDeleted) {
             return '';
@@ -301,7 +302,7 @@ export class MySqlTranslator<ED extends EntityDict> extends SqlTranslator<ED> {
             return 'bigint ';
         }
         if (['object', 'array'].includes(type)) {
-            return 'text ';
+            return 'json ';
         }
         if (['image', 'function'].includes(type)) {
             return 'text ';
@@ -379,6 +380,127 @@ export class MySqlTranslator<ED extends EntityDict> extends SqlTranslator<ED> {
                 return ` \`${alias}\`.\`${attr}\``;
             }
         }
+    }
+
+    protected translateObjectPredicate(predicate: Record<string, any>, alias: string, attr: string): string {
+        let stmt = '';
+        const translatePredicate = (o: Record<string, any>, p: string) => {
+            const predicate2 = Object.keys(o)[0];
+            if (predicate2.startsWith('$')) {
+                if (stmt)  {
+                    stmt += ' and ';
+                }
+                // todo
+                if (predicate2 === '$contains') {
+                    // json_contains，多值的包含关系
+                    const value = JSON.stringify(o[predicate2]);
+                    stmt += `JSON_CONTAINS(${alias}.${attr}->>"$${p}", CAST('${value}' AS JSON)) `;
+                }
+                else if (predicate2 === '$overlaps') {
+                    // json_overlaps，多值的交叉关系
+                    const value = JSON.stringify(o[predicate2]);
+                    stmt += `JSON_OVERLAPS(${alias}.${attr}->>"$${p}", CAST('${value}' AS JSON)) `;
+                }
+                else {
+                    stmt += `${alias}.${attr}->>"$${p}" ${this.translatePredicate(predicate2, o[predicate2])}`;
+                }
+            }
+            else {
+                // 继续子对象解构
+                translateInner(o, p);
+            }
+        };
+
+        const translateInner = (o: Record<string, any> | Array<any>, p: string) => {
+            if (o instanceof Array) {
+                o.forEach(
+                    (item, idx) => {
+                        const p2 = `${p}[${idx}]`;
+                        if (typeof item !== 'object') {
+                            if (item !== null && item !== undefined) {
+                                if (stmt) {
+                                    stmt += ' and ';
+                                }
+                                stmt += `${alias}.${attr}->>"$${p2}"`;
+                                if (typeof item === 'string') {
+                                    stmt += ` = '${item}'`;
+                                }
+                                else {
+                                    stmt += ` = ${item}`;
+                                }
+                            }
+                        }
+                        else {
+                            translatePredicate(item, p2);
+                        }
+                    }
+                )
+            }
+            else {
+                for (const key in o) {
+                    const p2 = `${p}.${key}`;
+                    if (typeof o[key] !== 'object') {
+                        if (o[key] !== null && o[key] !== undefined) {
+                            if (stmt) {
+                                stmt += ', ';
+                            }
+                            stmt += `${alias}.${attr}->>"$${p2}"`;
+                            if (typeof o[key] === 'string') {
+                                stmt += ` = '${o[key]}'`;
+                            }
+                            else {
+                                stmt += ` = ${o[key]}`;
+                            }
+                        }
+                    }
+                    else {
+                        translatePredicate(o[key], p2);
+                    }
+                }
+            }
+        };
+        translatePredicate(predicate, '');
+        return stmt;
+    }
+
+    protected translateObjectProjection(projection: Record<string, any>, alias: string, attr: string, prefix: string): string {
+        let stmt = '';
+        const translateInner = (o: Record<string, any> | Array<any>, p: string) => {
+            if (o instanceof Array) {
+                o.forEach(
+                    (item, idx) => {
+                        const p2 = `${p}[${idx}]`;
+                        if (typeof item === 'number') {
+                            if (stmt) {
+                                stmt += ', ';
+                            }
+                            stmt += `${alias}.${attr}->>"$${p2}"`;
+                            stmt += prefix ? ` as \`${prefix}.${attr}${p2}\`` : ` as \`${attr}${p2}\``;
+                        }
+                        else if (typeof item === 'object') {
+                            translateInner(item, p2);
+                        }
+                    }
+                )
+            }
+            else {
+                for (const key in o) {
+                    const p2 = `${p}.${key}`;
+                    if (typeof o[key] === 'number') {
+                        if (stmt) {
+                            stmt += ', ';
+                        }
+                        stmt += `${alias}.${attr}->>"$${p2}"`;
+                        stmt += prefix ? ` as \`${prefix}.${attr}${p2}\`` : ` as \`${attr}${p2}\``;
+                    }
+                    else {
+                        translateInner(o[key], p2);
+                    }
+                }
+            }
+        };
+        translateInner(projection, '');
+        return stmt;
     }
 
     protected translateAttrValue(dataType: DataType | Ref, value: any): string {

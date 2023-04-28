@@ -4,7 +4,7 @@ import { CascadeStore } from 'oak-domain/lib/store/CascadeStore';
 import { MySQLConfiguration } from './types/Configuration';
 import { MySqlConnector } from './connector';
 import { MySqlTranslator, MySqlSelectOption, MysqlOperateOption } from './translator';
-import { assign } from 'lodash';
+import { assign, set } from 'lodash';
 import assert from 'assert';
 import { judgeRelation } from 'oak-domain/lib/store/relation';
 import { AsyncContext, AsyncRowStore } from 'oak-domain/lib/store/AsyncRowStore';
@@ -45,7 +45,7 @@ export class MysqlStore<ED extends EntityDict & BaseEntityDict, Cxt extends Asyn
         this.translator = new MySqlTranslator(storageSchema);
     }
     protected async aggregateAsync<T extends keyof ED, OP extends SelectOption, Cxt extends AsyncContext<ED>>(entity: T, aggregation: ED[T]['Aggregation'], context: Cxt, option: OP): Promise<AggregationResult<ED[T]['Schema']>> {
-        const sql = this.translator.translateAggregate(entity, aggregation, option);        
+        const sql = this.translator.translateAggregate(entity, aggregation, option);
         const result = await this.connector.exec(sql, context.getCurrentTxnId());
         return this.formResult(entity, result);
     }
@@ -60,6 +60,25 @@ export class MysqlStore<ED extends EntityDict & BaseEntityDict, Cxt extends Asyn
     }
     private formResult<T extends keyof ED>(entity: T, result: any): any {
         const schema = this.getSchema();
+        function resolveObject(r: Record<string, any>, path: string, value: any) {
+            const i = path.indexOf(".");
+            const bs = path.indexOf('[');
+            const be = path.indexOf(']');
+            if (i === -1 && bs === -1) {
+                r[i] = value;
+            }
+            else if (i === -1) {
+
+            }
+            else if (bs === -1) {
+                const attrHead = path.slice(0, i);
+                const attrTail = path.slice(i + 1);
+                if (!r[attrHead]) {
+                    r[attrHead] = {};
+                }
+                resolveObject(r[attrHead], attrTail, value);
+            }
+        }
         function resolveAttribute<E extends keyof ED>(entity2: E, r: Record<string, any>, attr: string, value: any) {
             const { attributes, view } = schema[entity2];
             if (!view) {
@@ -67,19 +86,25 @@ export class MysqlStore<ED extends EntityDict & BaseEntityDict, Cxt extends Asyn
                 if (i !== -1) {
                     const attrHead = attr.slice(0, i);
                     const attrTail = attr.slice(i + 1);
-                    if (!r[attrHead]) {
-                        r[attrHead] = {};
-                    }
                     const rel = judgeRelation(schema, entity2, attrHead);
-                    if (rel === 0) {
-                        resolveAttribute(entity2, r[attrHead], attrTail, value);
-                    }
-                    else if (rel === 2) {
-                        resolveAttribute(attrHead, r[attrHead], attrTail, value);
+                    if (rel === 1) {
+                        set(r, attr, value);
                     }
                     else {
-                        assert (typeof rel === 'string');
-                        resolveAttribute(rel, r[attrHead], attrTail, value);
+                        if (!r[attrHead]) {
+                            r[attrHead] = {};
+                        }
+
+                        if (rel === 0) {
+                            resolveAttribute(entity2, r[attrHead], attrTail, value);
+                        }
+                        else if (rel === 2) {
+                            resolveAttribute(attrHead, r[attrHead], attrTail, value);
+                        }
+                        else {
+                            assert(typeof rel === 'string');
+                            resolveAttribute(rel, r[attrHead], attrTail, value);
+                        }
                     }
                 }
                 else if (attributes[attr]) {
@@ -161,18 +186,18 @@ export class MysqlStore<ED extends EntityDict & BaseEntityDict, Cxt extends Asyn
                 const rel = judgeRelation(schema, e, attr);
                 if (rel === 2) {
                     // 边界，如果是toModi的对象，这里的外键确实有可能为空
-                    assert (schema[e].toModi || r.entity !== attr || r.entityId === r[attr].id, `对象${<string>e}取数据时，发现entityId与连接的对象的主键不一致，rowId是${r.id}，其entityId值为${r.entityId}，连接的对象的主键为${r[attr].id}`);
+                    assert(schema[e].toModi || r.entity !== attr || r.entityId === r[attr].id, `对象${<string>e}取数据时，发现entityId与连接的对象的主键不一致，rowId是${r.id}，其entityId值为${r.entityId}，连接的对象的主键为${r[attr].id}`);
                     if (r[attr].id === null) {
                         assert(schema[e].toModi || r.entity !== attr);
                         delete r[attr];
                         continue;
                     }
-                    assert (r.entity === attr, `对象${<string>e}取数据时，发现entity值与连接的外键对象不一致，rowId是${r.id}，其entity值为${r.entity}，连接的对象为${attr}`);
+                    assert(r.entity === attr, `对象${<string>e}取数据时，发现entity值与连接的外键对象不一致，rowId是${r.id}，其entity值为${r.entity}，连接的对象为${attr}`);
                     removeNullObjects(r[attr], attr);
                 }
                 else if (typeof rel === 'string') {
                     // 边界，如果是toModi的对象，这里的外键确实有可能为空
-                    assert (schema[e].toModi || r[`${attr}Id`] === r[attr].id, `对象${<string>e}取数据时，发现其外键与连接的对象的主键不一致，rowId是${r.id}，其${attr}Id值为${r[`${attr}Id`]}，连接的对象的主键为${r[attr].id}`);
+                    assert(schema[e].toModi || r[`${attr}Id`] === r[attr].id, `对象${<string>e}取数据时，发现其外键与连接的对象的主键不一致，rowId是${r.id}，其${attr}Id值为${r[`${attr}Id`]}，连接的对象的主键为${r[attr].id}`);
                     if (r[attr].id === null) {
                         assert(schema[e].toModi || r[`${attr}Id`] === null);
                         delete r[attr];

@@ -1,15 +1,16 @@
 import assert from 'assert';
 import { assign, cloneDeep, intersection, keys, set } from 'lodash';
 import { Attribute, EntityDict, EXPRESSION_PREFIX, Index, OperateOption, Q_FullTextValue, Ref, RefOrExpression, SelectOption, StorageSchema } from "oak-domain/lib/types";
+import { EntityDict as BaseEntityDict } from 'oak-domain/lib/base-app-domain';
 import { DataType } from "oak-domain/lib/types/schema/DataTypes";
 import { judgeRelation } from 'oak-domain/lib/store/relation';
 
 export interface SqlSelectOption extends SelectOption {
 };
-export interface SqlOperateOption extends OperateOption {    
+export interface SqlOperateOption extends OperateOption {
 };
 
-export abstract class SqlTranslator<ED extends EntityDict> {
+export abstract class SqlTranslator<ED extends EntityDict & BaseEntityDict> {
     readonly schema: StorageSchema<ED>;
     constructor(schema: StorageSchema<ED>) {
         this.schema = this.makeFullSchema(schema);
@@ -166,11 +167,15 @@ export abstract class SqlTranslator<ED extends EntityDict> {
 
     protected abstract translateAttrProjection(dataType: DataType, alias: string, attr: string): string;
 
+    protected abstract translateObjectProjection(projection: Record<string, any>, alias: string, attr: string, prefix: string): string;
+
     protected abstract translateAttrValue(dataType: DataType | Ref, value: any): string;
 
     protected abstract translateFullTextSearch<T extends keyof ED>(value: Q_FullTextValue, entity: T, alias: string): string;
 
     abstract translateCreateEntity<T extends keyof ED>(entity: T, option: { replace?: boolean }): string[];
+
+    protected abstract translateObjectPredicate(predicate: Record<string, any>, alias: string, attr: string): string;
 
     protected abstract populateSelectStmt<T extends keyof ED, OP extends SqlSelectOption>(
         projectionText: string,
@@ -206,7 +211,7 @@ export abstract class SqlTranslator<ED extends EntityDict> {
         option?: OP): string;
 
     protected abstract translateExpression<T extends keyof ED>(
-        entity: T,        
+        entity: T,
         alias: string,
         expression: RefOrExpression<keyof ED[T]['OpSchema']>,
         refDict: Record<string, [string, keyof ED]>): string;
@@ -331,7 +336,7 @@ export abstract class SqlTranslator<ED extends EntityDict> {
                         })
                     }
                     else if (['$text'].includes(op)) {
-    
+
                     }
                     else {
                         const rel = judgeRelation(this.schema, entityName, op);
@@ -464,7 +469,7 @@ export abstract class SqlTranslator<ED extends EntityDict> {
             );
         }
 
-        const analyzeProjectionNode = <E extends keyof ED>({ node, path, entityName, alias }: { 
+        const analyzeProjectionNode = <E extends keyof ED>({ node, path, entityName, alias }: {
             node: ED[E]['Selection']['data'];
             path: string;
             entityName: E;
@@ -553,7 +558,7 @@ export abstract class SqlTranslator<ED extends EntityDict> {
         };
     }
 
-    private translateComparison(attr: string, value: any, type: DataType | Ref): string {
+    private translateComparison(attr: string, value: any, type?: DataType | Ref): string {
         const SQL_OP: {
             [op: string]: string,
         } = {
@@ -566,7 +571,12 @@ export abstract class SqlTranslator<ED extends EntityDict> {
         };
 
         if (Object.keys(SQL_OP).includes(attr)) {
-            return ` ${SQL_OP[attr]} ${this.translateAttrValue(type, value)}`;
+            if (type) {
+                return ` ${SQL_OP[attr]} ${this.translateAttrValue(type, value)}`;
+            }
+            else {
+                return ` ${SQL_OP[attr]} ${value}`;
+            }
         }
 
         switch (attr) {
@@ -585,26 +595,11 @@ export abstract class SqlTranslator<ED extends EntityDict> {
         }
     }
 
-    private translateElement(attr: string, value: boolean): string {
-        assert(attr === '$exists');      // only support one operator now
-        if (value) {
-            return ' is not null';
-        }
-        return ' is null';
-    }
-
     private translateEvaluation<T extends keyof ED>(attr: string, value: any, entity: T, alias: string, type: DataType | Ref, initialNumber: number, refAlias: Record<string, [string, keyof ED]>): {
         stmt: string;
         currentNumber: number;
     } {
         switch (attr) {
-            case '$text': {
-                // fulltext search
-                return {
-                    stmt: this.translateFullTextSearch(value, entity, alias),
-                    currentNumber: initialNumber,
-                };
-            }
             case '$in':
             case '$nin': {
                 const IN_OP = {
@@ -612,40 +607,14 @@ export abstract class SqlTranslator<ED extends EntityDict> {
                     $nin: 'not in',
                 };
                 if (value instanceof Array) {
-                    const values = value.map(
-                        (v) => {
-                            if (['varchar', 'char', 'text', 'nvarchar', 'ref', 'enum'].includes(type as string)) {
-                                return `'${v}'`;
-                            }
-                            else {
-                                return `${v}`;
-                            }
-                        }
-                    );
-                    if (values.length > 0) {
-                        return {
-                            stmt: ` ${IN_OP[attr]}(${values.join(',')})`,
-                            currentNumber: initialNumber,
-                        };
-                    }
-                    else {
-                        if (attr === '$in') {
-                            return {
-                                stmt: ' in (null)',
-                                currentNumber: initialNumber,
-                            };
-                        }
-                        else {
-                            return {
-                                stmt: ' is not null',
-                                currentNumber: initialNumber,
-                            };
-                        }
+                    return {
+                        stmt: this.translatePredicate(attr, value, type),
+                        currentNumber: initialNumber,
                     }
                 }
                 else {
                     // sub query
-                    const {stmt: subQueryStmt, currentNumber } = this.translateSelectInner(value.entity, value, initialNumber, refAlias, undefined);
+                    const { stmt: subQueryStmt, currentNumber } = this.translateSelectInner(value.entity, value, initialNumber, refAlias, undefined);
                     return {
                         stmt: ` ${IN_OP[attr]}(${subQueryStmt})`,
                         currentNumber,
@@ -653,22 +622,59 @@ export abstract class SqlTranslator<ED extends EntityDict> {
                 }
             }
             default: {
-                assert('$between' === attr);
-                const values = value.map(
-                    (v: string | number) => {
-                        if (['varchar', 'char', 'text', 'nvarchar', 'ref'].includes(type as string)) {
-                            return `'${v}'`;
-                        }
-                        else {
-                            return `${v}`;
-                        }
-                    }
-                );
-                return {
-                    stmt: ` between ${values[0]} and ${values[1]}`,
-                    currentNumber: initialNumber,
-                };
+                throw new Error(`${attr} is not evaluation predicate`);
             }
+        }
+    }
+
+    protected translatePredicate(predicate: string, value: any, type?: DataType | Ref): string {
+        if (['$gt', '$gte', '$lt', '$lte', '$eq', '$ne', '$startsWith', '$endsWith', '$includes'].includes(predicate)) {
+            return this.translateComparison(predicate, value, type);
+        }
+        else if (['$in', '$nin'].includes(predicate)) {
+            assert(value instanceof Array);
+            const IN_OP = {
+                $in: 'in',
+                $nin: 'not in',
+            };
+            const values = value.map(
+                (v: string | number) => {
+                    if (type && ['varchar', 'char', 'text', 'nvarchar', 'ref', 'enum'].includes(type as string) || typeof v === 'string') {
+                        return `'${v}'`;
+                    }
+                    else {
+                        return `${v}`;
+                    }
+                }
+            );
+            if (values.length > 0) {
+                return ` ${IN_OP[predicate as '$in']}(${values.join(',')})`;
+            }
+            if (predicate === '$in') {
+                return ' in (null)';
+            }
+            return ' is not null';
+        }
+        else if (predicate === '$between') {
+            const values = value.map(
+                (v: string | number) => {
+                    if (type && ['varchar', 'char', 'text', 'nvarchar', 'ref', 'enum'].includes(type as string) || typeof v === 'string') {
+                        return `'${v}'`;
+                    }
+                    else {
+                        return `${v}`;
+                    }
+                }
+            );
+            // between是所有数据库都支持的语法吗？
+            return ` between ${values[0]} and ${values[1]}`;
+        }
+        else {
+            assert(predicate === '$exists');
+            if (value) {
+                return ' is not null';
+            }
+            return ' is null';
         }
     }
 
@@ -701,7 +707,6 @@ export abstract class SqlTranslator<ED extends EntityDict> {
                             whereText += ' and '
                         }
                         if (['$and', '$or', '$xor', '$not'].includes(attr)) {
-                            let result = '';
                             whereText += '(';
                             switch (attr) {
                                 case '$and':
@@ -710,7 +715,7 @@ export abstract class SqlTranslator<ED extends EntityDict> {
                                     const logicQueries = filter2[attr];
                                     logicQueries.forEach(
                                         (logicQuery: ED[E]['Selection']['filter'], index: number) => {
-                                            const sql = translateInner(entity2, path, logicQuery);
+                                            const sql = translateInner(entity2, path, logicQuery, 'ref'); // 只要传个值就行了，应该无所谓
                                             if (sql) {
                                                 whereText += ` (${sql})`;
                                                 if (index < logicQueries.length - 1) {
@@ -724,29 +729,21 @@ export abstract class SqlTranslator<ED extends EntityDict> {
                                 default: {
                                     assert(attr === '$not');
                                     const logicQuery = filter2[attr];
-                                    const sql = translateInner(entity2, path, logicQuery);
+                                    const sql = translateInner(entity2, path, logicQuery, 'ref'); // 只要传个值就行了，应该无所谓
                                     if (sql) {
-                                        whereText += ` not (${translateInner(entity2, path, logicQuery)})`;
+                                        whereText += ` not (${sql})`;
                                         break;
                                     }
                                 }
                             }
                             whereText += ')';
                         }
+                        else if (attr === '$text') {
+                            whereText += `(${this.translateFullTextSearch(filter2[attr], entity, alias)})`;
+                        }
                         else if (attr.toLowerCase().startsWith(EXPRESSION_PREFIX)) {
                             // expression
                             whereText += ` (${this.translateExpression(entity2, alias, filter2[attr], filterRefAlias)})`;
-                        }
-                        else if (['$gt', '$gte', '$lt', '$lte', '$eq', '$ne', '$startsWith', '$endsWith', '$includes'].includes(attr)) {
-                            whereText += this.translateComparison(attr, filter2[attr], type!);
-                        }
-                        else if (['$exists'].includes(attr)) {
-                            whereText += this.translateElement(attr, filter2[attr]);
-                        }
-                        else if (['$text', '$in', '$nin', '$between'].includes(attr)) {
-                            const { stmt, currentNumber: cn2 } = this.translateEvaluation(attr, filter2[attr], entity2, alias, type!, initialNumber, filterRefAlias);
-                            whereText += stmt;
-                            currentNumber = cn2;
                         }
                         else {
                             const rel = judgeRelation(this.schema, entity2, attr);
@@ -759,9 +756,25 @@ export abstract class SqlTranslator<ED extends EntityDict> {
                             else {
                                 assert(attributes.hasOwnProperty(attr), `非法的属性${attr}`);
                                 const { type: type2 } = attributes[attr];
-//                                 assert (type2 !== 'ref');
-                                if (typeof filter2[attr] === 'object' && Object.keys(filter2[attr])[0] && Object.keys(filter2[attr])[0].startsWith('$')) {
-                                    whereText += ` (\`${alias}\`.\`${attr}\` ${translateInner(entity2, path, filter2[attr], type2)})`
+                                // assert (type2 !== 'ref');
+                                if (typeof filter2[attr] === 'object') {
+                                    const predicate = Object.keys(filter2[attr])[0];
+                                    if (predicate.startsWith('$')) {
+                                        // 对属性上的谓词处理
+                                        if (['$in', '$nin'].includes(predicate)) {
+                                            const { stmt, currentNumber: cn2 } = this.translateEvaluation(predicate, filter2[attr][predicate], entity2, alias, type!, initialNumber, filterRefAlias);
+                                            whereText += ` (\`${alias}\`.\`${attr}\` ${stmt})`;
+                                            currentNumber = cn2;
+                                        }
+                                        else {
+                                            whereText += ` (\`${alias}\`.\`${attr}\` ${this.translatePredicate(predicate, filter2[attr][predicate], type)})`;
+                                        }                                        
+                                    }
+                                    else {
+                                        // 对object数据的深层次查询，这里必须要假设该数据是json
+                                        assert(['object', 'array'].includes(type2));
+                                        whereText += `(${this.translateObjectPredicate(filter2[attr], alias, attr)})`;
+                                    }
                                 }
                                 else {
                                     whereText += ` (\`${alias}\`.\`${attr}\` = ${this.translateAttrValue(type2, filter2[attr])})`;
@@ -889,7 +902,7 @@ export abstract class SqlTranslator<ED extends EntityDict> {
                             const { type } = attributes[attr];
                             if (projection2[attr] === 1) {
                                 if (disableAs) {
-                                    projText += ` ${this.translateAttrProjection(type as DataType, alias, attr)}`;                                    
+                                    projText += ` ${this.translateAttrProjection(type as DataType, alias, attr)}`;
                                 }
                                 else {
                                     projText += ` ${this.translateAttrProjection(type as DataType, alias, attr)} as \`${prefix2}${attr}\``;
@@ -900,6 +913,12 @@ export abstract class SqlTranslator<ED extends EntityDict> {
                                         as += `, \`${prefix2}${attr}\``;
                                     }
                                 }
+                            }
+                            else if (typeof projection2[attr] === 'object') {
+                                // 对JSON对象的取值
+                                assert(!disableAs);
+                                assert(['object', 'array'].includes(type));
+                                projText += ` ${this.translateObjectProjection(projection2[attr], alias, attr, prefix2)}`;
                             }
                             else {
                                 assert(typeof projection2 === 'string');
@@ -972,7 +991,7 @@ export abstract class SqlTranslator<ED extends EntityDict> {
 
     translateAggregate<T extends keyof ED, OP extends SqlSelectOption>(entity: T, aggregation: ED[T]['Aggregation'], option?: OP): string {
         const { data, filter, sorter, indexFrom, count } = aggregation;
-        const { from : fromText, aliasDict, projectionRefAlias, extraWhere, filterRefAlias, currentNumber } = this.analyzeJoin(entity, {
+        const { from: fromText, aliasDict, projectionRefAlias, extraWhere, filterRefAlias, currentNumber } = this.analyzeJoin(entity, {
             aggregation: data,
             filter,
             sorter,

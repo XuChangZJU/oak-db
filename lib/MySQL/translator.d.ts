@@ -1,11 +1,12 @@
 import { EntityDict, Q_FullTextValue, RefOrExpression, Ref, StorageSchema } from "oak-domain/lib/types";
+import { EntityDict as BaseEntityDict } from 'oak-domain/lib/base-app-domain';
 import { DataType } from "oak-domain/lib/types/schema/DataTypes";
 import { SqlOperateOption, SqlSelectOption, SqlTranslator } from "../sqlTranslator";
 export interface MySqlSelectOption extends SqlSelectOption {
 }
 export interface MysqlOperateOption extends SqlOperateOption {
 }
-export declare class MySqlTranslator<ED extends EntityDict> extends SqlTranslator<ED> {
+export declare class MySqlTranslator<ED extends EntityDict & BaseEntityDict> extends SqlTranslator<ED> {
     protected getDefaultSelectFilter(alias: string, option?: MySqlSelectOption): string;
     private makeUpSchema;
     constructor(schema: StorageSchema<ED>);
@@ -91,6 +92,8 @@ export declare class MySqlTranslator<ED extends EntityDict> extends SqlTranslato
     maxAliasLength: number;
     private populateDataTypeDef;
     protected translateAttrProjection(dataType: DataType, alias: string, attr: string): string;
+    protected translateObjectPredicate(predicate: Record<string, any>, alias: string, attr: string): string;
+    protected translateObjectProjection(projection: Record<string, any>, alias: string, attr: string, prefix: string): string;
     protected translateAttrValue(dataType: DataType | Ref, value: any): string;
     protected translateFullTextSearch<T extends keyof ED>(value: Q_FullTextValue, entity: T, alias: string): string;
     translateCreateEntity<T extends keyof ED>(entity: T, options?: {
