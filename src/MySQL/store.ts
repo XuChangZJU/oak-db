@@ -296,10 +296,10 @@ export class MysqlStore<ED extends EntityDict & BaseEntityDict, Cxt extends Asyn
     async operate<T extends keyof ED>(entity: T, operation: ED[T]['Operation'], context: Cxt, option: OperateOption): Promise<OperationResult<ED>> {
         const { action } = operation;
         assert(!['select', 'download', 'stat'].includes(action), '现在不支持使用select operation');
-        return await this.cascadeUpdateAsync(entity, operation as any, context, option);
+        return await super.operateAsync(entity, operation as any, context, option);
     }
     async select<T extends keyof ED>(entity: T, selection: ED[T]['Selection'], context: Cxt, option: SelectOption): Promise<Partial<ED[T]['Schema']>[]> {
-        const result = await this.cascadeSelectAsync(entity, selection, context, option);
+        const result = await super.selectAsync(entity, selection, context, option);
         return result;
     }
     async count<T extends keyof ED>(entity: T, selection: Pick<ED[T]['Selection'], 'filter' | 'count'>, context: Cxt, option: SelectOption): Promise<number> {
