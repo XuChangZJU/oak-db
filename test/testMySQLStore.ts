@@ -977,7 +977,6 @@ describe('test mysqlstore', function () {
     });
 
     it('[1.9]test + aggregation', async () => {
-
         const context = new TestContext(store);
         await context.begin();
 
@@ -1349,6 +1348,264 @@ describe('test mysqlstore', function () {
         assert(row6.length === 0);
         assert(row7.length === 1);
         // console.log(JSON.stringify(row7));
+    });
+
+    it('[1.13]sub query predicate', async () => {
+        const context = new TestContext(store);
+        await context.begin();
+        const id1 = await generateNewIdAsync();
+        const id2 = await generateNewIdAsync();
+        const id3 = await generateNewIdAsync();
+        const systems: EntityDict['system']['CreateSingle']['data'][] = [
+            {
+                id: id1,
+                name: 'test1.13-1',
+                description: 'aaaaa',
+                config: {
+                    App: {},
+                },
+                folder: '/test2',
+                platformId: 'platform-111',
+                application$system: [{
+                    id: v4(),
+                    action: 'create',
+                    data: {
+                        id: v4(),
+                        name: 'test1.13-1-1',
+                        description: 'ttttt',
+                        type: 'web',
+                        config: {
+                            type: 'web',
+                            passport: [],
+                        },
+                    }
+                },
+                {
+                    id: v4(),
+                    action: 'create',
+                    data: {
+                        id: v4(),
+                        name: 'test1.13-1-2',
+                        description: 'ttttt2',
+                        type: 'wechatMp',
+                        config: {
+                            type: 'web',
+                            passport: [],
+                        },
+                    }
+                }]
+            },
+            {
+                id: id2,
+                name: 'test1.13-2',
+                description: 'aaaaa',
+                config: {
+                    App: {},
+                },
+                folder: '/test2',
+                platformId: 'platform-111',
+                application$system: [{
+                    id: v4(),
+                    action: 'create',
+                    data: {
+                        id: v4(),
+                        name: 'test1.13-2-1',
+                        description: 'ttttt',
+                        type: 'web',
+                        config: {
+                            type: 'web',
+                            passport: [],
+                        },
+                    }
+                },
+                {
+                    id: v4(),
+                    action: 'create',
+                    data: {
+                        id: v4(),
+                        name: 'test1.13-2-2',
+                        description: 'ttttt2',
+                        type: 'wechatMp',
+                        config: {
+                            type: 'web',
+                            passport: [],
+                        },
+                    }
+                }]
+            },
+            {
+
+                id: id3,
+                name: 'test1.13-3',
+                description: 'aaaaa',
+                config: {
+                    App: {},
+                },
+                folder: '/test2',
+                platformId: 'platform-111',
+            }
+        ];
+
+        await context.operate('system', {
+            id: v4(),
+            action: 'create',
+            data: systems,
+        }, {});
+
+        await context.commit();
+
+        const r1 = await context.select('system', {
+            data: {
+                id: 1,
+            },
+            filter: {
+                id: id1,
+                application$system: {
+                }
+            }
+        }, {});
+        assert(r1.length === 1);
+
+        const r2 = await context.select('system', {
+            data: {
+                id: 1,
+            },
+            filter: {
+                id: id1,
+                application$system: {
+                    '#sqp': 'not in',
+                },
+            },
+        }, {});
+        assert(r2.length === 0);
+
+        const r22 = await context.select('system', {
+            data: {
+                id: 1,
+            },
+            filter: {
+                id: id1,
+                application$system: {
+                    name: {
+                        $startsWith: 'test1.13-2',
+                    },
+                    '#sqp': 'not in',
+                },
+            },
+        }, {});
+        assert(r22.length === 1);
+
+        const r23 = await context.select('system', {
+            data: {
+                id: 1,
+            },
+            filter: {
+                id: id1,
+                application$system: {
+                    name: {
+                        $startsWith: 'test1.13-2',
+                    },
+                    '#sqp': 'all',
+                },
+            },
+        }, {});
+        assert(r23.length === 0);
+
+        const r24 = await context.select('system', {
+            data: {
+                id: 1,
+            },
+            filter: {
+                id: id1,
+                application$system: {
+                    name: {
+                        $startsWith: 'test1.13-2',
+                    },
+                    '#sqp': 'not all',
+                },
+            },
+        }, {});
+        assert(r24.length === 1);
+
+        const r3 = await context.select('system', {
+            data: {
+                id: 1,
+            },
+            filter: {
+                id: id1,
+                application$system: {
+                    '#sqp': 'all',
+                },
+            },
+        }, {});
+        assert(r3.length === 0);
+
+        
+        const r4 = await context.select('system', {
+            data: {
+                id: 1,
+            },
+            filter: {
+                id: id1,
+                application$system: {
+                    '#sqp': 'not all',
+                },
+            },
+        }, {});
+        assert(r4.length === 1);
+
+        const r5 = await context.select('system', {
+            data: {
+                id: 1,
+            },
+            filter: {
+                application$system: {
+                },
+            },
+        }, {});
+        assert(r5.length === 2);
+        assert(r5.map(ele => ele.id).includes(id1));
+        assert(r5.map(ele => ele.id).includes(id2));
+
+        const r6 = await context.select('system', {
+            data: {
+                id: 1,
+            },
+            filter: {
+                application$system: {
+                    '#sqp': 'not in',
+                },
+            },
+        }, {});
+        assert(r6.length === 1);
+        assert(r6.map(ele => ele.id).includes(id3));
+
+        const r7 = await context.select('system', {
+            data: {
+                id: 1,
+            },
+            filter: {
+                application$system: {
+                    '#sqp': 'all',
+                },
+            },
+        }, {});
+        assert(r7.length === 0);
+
+        const r8 = await context.select('system', {
+            data: {
+                id: 1,
+            },
+            filter: {
+                application$system: {
+                    '#sqp': 'not all',
+                },
+            },
+        }, {});
+        assert(r8.length === 3);
+        assert(r8.map(ele => ele.id).includes(id1));
+        assert(r8.map(ele => ele.id).includes(id2));
+        assert(r8.map(ele => ele.id).includes(id3));
     });
 
     after(() => {
