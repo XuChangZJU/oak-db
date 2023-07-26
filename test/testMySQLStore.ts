@@ -1202,6 +1202,59 @@ describe('test mysqlstore', function () {
         assert (row2.length === 0, JSON.stringify(row2));
     });
 
+
+    it('[1.11.2]json filter on top level', async() => {
+        const context = new TestContext(store);
+        await context.begin();
+
+        const id = await generateNewIdAsync();
+        await store.operate('actionAuth', {
+            id: await generateNewIdAsync(),
+            action: 'create',
+            data: {
+                id,
+                destEntity: '1.12',
+                path: '',
+                deActions: ['1.12'],
+            }
+        }, context, {});
+
+        await context.commit();
+
+        const row = await store.select('actionAuth', {
+            data: {
+                id: 1,
+                deActions: 1,
+                destEntity: 1,
+            },
+            filter: {
+                id,
+                deActions: {
+                    $overlaps: '1.12',
+                }
+            }
+        }, context, {});
+
+
+        const row2 = await store.select('actionAuth', {
+            data: {
+                id: 1,
+                deActions: 1,
+                destEntity: 1,
+            },
+            filter: {
+                id,
+                deActions: {
+                    $contains: ['1.13333'],
+                }
+            }
+        }, context, {});
+        // console.log(JSON.stringify(row));
+        assert (row.length === 1, JSON.stringify(row));
+        console.log(JSON.stringify(row));
+        assert (row2.length === 0, JSON.stringify(row2));
+    });
+
     it('[1.12]complicated json filter', async() => {
         const context = new TestContext(store);
         await context.begin();
