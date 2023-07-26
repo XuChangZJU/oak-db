@@ -1,8 +1,11 @@
 import { AsyncContext } from 'oak-domain/lib/store/AsyncRowStore';
 import { EntityDict } from './test-app-domain';
 export class TestContext extends AsyncContext<EntityDict> {
-    refineOpRecords(): Promise<void> {
-        throw new Error('Method not implemented.');
+    openRootMode(): () => void {
+        return () => undefined;
+    }
+    async refineOpRecords(): Promise<void> {
+        return;
     }
     isRoot(): boolean {
         return true;

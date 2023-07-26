@@ -5,7 +5,6 @@ import { EntityDict, Geo, Q_FullTextValue, RefOrExpression, Ref, StorageSchema, 
 import { EntityDict as BaseEntityDict } from 'oak-domain/lib/base-app-domain';
 import { DataType, DataTypeParams } from "oak-domain/lib/types/schema/DataTypes";
 import { SqlOperateOption, SqlSelectOption, SqlTranslator } from "../sqlTranslator";
-import { isDateExpression } from 'oak-domain/lib/types/Expression';
 
 const GeoTypes = [
     {

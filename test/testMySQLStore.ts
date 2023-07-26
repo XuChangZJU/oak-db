@@ -224,11 +224,6 @@ describe('test mysqlstore', function () {
             }
         }, context, {});
 
-        /**
-         * 这个子查询没有跨结点的表达式，所以应该可以提前计算子查询的值
-         * 这个可以跟一下store.ts中translateAttribute函数里$in的分支代码
-         * by Xc
-         */
         process.env.NODE_ENV = 'development';
         const rows = await store.select('user', {
             data: {
@@ -237,16 +232,7 @@ describe('test mysqlstore', function () {
                 nickname: 1,
             },
             filter: {
-                id: {
-                    $in: {
-                        entity: 'token',
-                        data: {
-                            userId: 1,
-                        },
-                        filter: {
-                            entity: 'mobile',
-                        }
-                    },
+                token$user: {
                 }
             },
         }, context, {});
@@ -460,28 +446,21 @@ describe('test mysqlstore', function () {
             filter: {
                 "#id": 'node-1',
                 $and: [
-                    {
-                        id: {
-                            $nin: {
-                                entity: 'application',
-                                data: {
-                                    systemId: 1,
-                                },
-                                filter: {
-                                    $expr: {
-                                        $eq: [
-                                            {
-                                                "#attr": 'name',
-                                            },
-                                            {
-                                                '#refId': 'node-1',
-                                                "#refAttr": 'name',
-                                            }
-                                        ]
+                    {     
+                        application$system: {
+                            '#sqp': 'not in',
+                            $expr: {
+                                $eq: [
+                                    {
+                                        "#attr": 'name',
                                     },
-                                    '#id': 'node-2',
-                                }
+                                    {
+                                        '#refId': 'node-1',
+                                        "#refAttr": 'name',
+                                    }
+                                ]
                             },
+                            '#id': 'node-2',
                         }
                     }, {
                         id: {
@@ -509,27 +488,19 @@ describe('test mysqlstore', function () {
                 "#id": 'node-1',
                 $and: [
                     {
-                        id: {
-                            $in: {
-                                entity: 'application',
-                                data: {
-                                    systemId: 1,
-                                },
-                                filter: {
-                                    $expr: {
-                                        $eq: [
-                                            {
-                                                "#attr": 'name',
-                                            },
-                                            {
-                                                '#refId': 'node-1',
-                                                "#refAttr": 'name',
-                                            }
-                                        ]
+                        application$system: {
+                            $expr: {
+                                $eq: [
+                                    {
+                                        "#attr": 'name',
                                     },
-                                }
+                                    {
+                                        '#refId': 'node-1',
+                                        "#refAttr": 'name',
+                                    }
+                                ]
                             },
-                        }
+                        },
                     },
                     {
                         id: {

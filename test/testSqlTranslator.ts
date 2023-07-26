@@ -102,17 +102,9 @@ describe('test MysqlTranslator', function() {
                 },
             },
             filter: {
-                userId: {
-                    $in: {
-                        entity: 'user',
-                        data: {
-                            id: 1,
-                        },
-                        filter: {
-                            name: {
-                                $includes: 'xc',
-                            },
-                        },
+                user: {
+                    name: {
+                        $includes: 'xc',
                     },
                 },
             },

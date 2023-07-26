@@ -1,9 +1,11 @@
 import assert from 'assert';
-import { assign, cloneDeep, intersection, keys, set } from 'lodash';
-import { Attribute, EntityDict, EXPRESSION_PREFIX, Index, OperateOption, Q_FullTextValue, Ref, RefOrExpression, SelectOption, StorageSchema } from "oak-domain/lib/types";
+import { assign, cloneDeep, identity, intersection, keys, set } from 'lodash';
+import { Attribute, EntityDict, EXPRESSION_PREFIX, Index, OperateOption, 
+    Q_FullTextValue, Ref, RefOrExpression, SelectOption, StorageSchema, SubQueryPredicateMetadata } from "oak-domain/lib/types";
 import { EntityDict as BaseEntityDict } from 'oak-domain/lib/base-app-domain';
 import { DataType } from "oak-domain/lib/types/schema/DataTypes";
 import { judgeRelation } from 'oak-domain/lib/store/relation';
+import { combineFilters } from 'oak-domain/lib/store/filter';
 
 export interface SqlSelectOption extends SelectOption {
 };
@@ -294,14 +296,12 @@ export abstract class SqlTranslator<ED extends EntityDict & BaseEntityDict> {
         projectionRefAlias: Record<string, [string, keyof ED]>;
         filterRefAlias: Record<string, [string, keyof ED]>;
         from: string;
-        extraWhere: string;
         currentNumber: number;
     } {
         const { schema } = this;
         let number = initialNumber || 1;
         const projectionRefAlias: Record<string, [string, keyof ED]> = {};
         const filterRefAlias: Record<string, [string, keyof ED]> = {};
-        let extraWhere = '';
 
         const alias = `${entity as string}_${number++}`;
         let from = ` \`${this.getStorageName(entity)}\` \`${alias}\` `;
@@ -382,7 +382,7 @@ export abstract class SqlTranslator<ED extends EntityDict & BaseEntityDict> {
                         }
                         else {
                             // 不支持一对多
-                            assert(rel === 0 || rel === 1);
+                            // assert(rel === 0 || rel === 1);
                         }
                     }
                 }
@@ -553,7 +553,6 @@ export abstract class SqlTranslator<ED extends EntityDict & BaseEntityDict> {
             from,
             projectionRefAlias,
             filterRefAlias,
-            extraWhere,
             currentNumber: number,
         };
     }
@@ -613,12 +612,13 @@ export abstract class SqlTranslator<ED extends EntityDict & BaseEntityDict> {
                     }
                 }
                 else {
+                    assert(false, '子查询已经改写为一对多的形式');
                     // sub query
-                    const { stmt: subQueryStmt, currentNumber } = this.translateSelectInner(value.entity, value, initialNumber, refAlias, undefined);
+                    /* const { stmt: subQueryStmt, currentNumber } = this.translateSelectInner(value.entity, value, initialNumber, refAlias, undefined);
                     return {
                         stmt: ` ${IN_OP[attr]}(${subQueryStmt})`,
                         currentNumber,
-                    };
+                    }; */
                 }
             }
             default: {
@@ -680,17 +680,15 @@ export abstract class SqlTranslator<ED extends EntityDict & BaseEntityDict> {
 
     private translateFilter<T extends keyof ED, OP extends SqlSelectOption>(
         entity: T,
-        selection: Pick<ED[T]['Selection'], 'filter'>,
+        filter: ED[T]['Selection']['filter'],
         aliasDict: Record<string, string>,
         filterRefAlias: Record<string, [string, keyof ED]>,
         initialNumber: number,
-        extraWhere?: string,
         option?: OP): {
             stmt: string;
             currentNumber: number;
         } {
         const { schema } = this;
-        const { filter } = selection;
 
         let currentNumber = initialNumber;
         const translateInner = <E extends keyof ED>(entity2: E, path: string, filter2?: ED[E]['Selection']['filter'], type?: DataType | Ref): string => {
@@ -753,27 +751,94 @@ export abstract class SqlTranslator<ED extends EntityDict & BaseEntityDict> {
                             else if (typeof rel === 'string') {
                                 whereText += ` (${translateInner(rel, `${path}${attr}/`, filter2[attr])})`;
                             }
+                            else if (rel instanceof Array) {
+                                const [subEntity, foreignKey] = rel;
+                                const predicate = (filter2[attr]['#sqp'] || 'in') as NonNullable<SubQueryPredicateMetadata['#sqp']>;
+                                /**
+                                 * 
+                                * in代表外键连接后至少有一行数据
+                                * not in代表外键连接后一行也不能有
+                                * all代表反外键连接条件的一行也不能有（符合的是否至少要有一行？直觉上没这个限制）
+                                * not all 代表反外键连接条件的至少有一行
+                                * 
+                                * 目前将这种子查询翻译成了exists查询，当外表很大而子查询结果集很小时可能有性能问题，取决于MySQL执行器的能力
+                                * by Xc 20230726
+                                 */
+                                const refAlia = Object.keys(filterRefAlias).find(
+                                    ele => ele[0] === alias
+                                );
+
+                                const refAlia2 = refAlia || alias;      // alias一定是唯一的，可以用来作为node id
+                                if (!refAlia) {
+                                    assert(!filterRefAlias[refAlia2]);
+                                    Object.assign(filterRefAlias, {
+                                        [refAlia2]: [alias, entity2],
+                                    });
+                                }
+                                const fk = foreignKey || 'entityId';
+                                const joinFilter = ['not in', 'in'].includes(predicate) ? {
+                                    $expr12: {
+                                        $eq: [
+                                            {
+                                                '#attr': fk,
+                                            },
+                                            {
+                                                '#refId': refAlia2,
+                                                '#refAttr': 'id',
+                                            }
+                                        ],
+                                    }
+                                } : {
+                                    $expr12: {
+                                        $ne: [
+                                            {
+                                                '#attr': fk,
+                                            },
+                                            {
+                                                '#refId': refAlia2,
+                                                '#refAttr': 'id',
+                                            }
+                                        ],
+                                    }
+                                };
+                                if (!foreignKey) {
+                                    Object.assign(joinFilter, {
+                                        entity: entity2,
+                                    });
+                                }
+                                const { stmt, currentNumber: ct2 } = this.translateSelectInner(subEntity, {
+                                    data: {
+                                        id: 1,
+                                    },
+                                    filter: combineFilters([joinFilter, filter2[attr]]),
+                                    indexFrom: 0,
+                                    count: 1,
+                                }, currentNumber, filterRefAlias, option);
+                                currentNumber = ct2;
+                                
+                                const PREDICATE_DICT = {
+                                    'in': 'exists',
+                                    'not in': 'not exists',
+                                    'all': 'not exists',
+                                    'not all': 'exists',
+                                };
+                                whereText += ` ${PREDICATE_DICT[predicate]} (${stmt})`;
+                            }
                             else {
                                 assert(attributes.hasOwnProperty(attr), `非法的属性${attr}`);
                                 const { type: type2 } = attributes[attr];
                                 // assert (type2 !== 'ref');
                                 if (typeof filter2[attr] === 'object') {
-                                    const predicate = Object.keys(filter2[attr])[0];
-                                    if (predicate.startsWith('$')) {
-                                        // 对属性上的谓词处理
-                                        if (['$in', '$nin'].includes(predicate)) {
-                                            const { stmt, currentNumber: cn2 } = this.translateEvaluation(predicate, filter2[attr][predicate], entity2, alias, type!, initialNumber, filterRefAlias);
-                                            whereText += ` (\`${alias}\`.\`${attr}\` ${stmt})`;
-                                            currentNumber = cn2;
-                                        }
-                                        else {
-                                            whereText += ` (\`${alias}\`.\`${attr}\` ${this.translatePredicate(predicate, filter2[attr][predicate], type)})`;
-                                        }                                        
+                                    if (['object', 'array'].includes(type2)) {
+                                        // 对object数据的深层次查询，这里调用数据库所支持的属性对象级查询，如mysql中的json查询
+                                        whereText += `(${this.translateObjectPredicate(filter2[attr], alias, attr)})`;
                                     }
                                     else {
-                                        // 对object数据的深层次查询，这里必须要假设该数据是json
-                                        assert(['object', 'array'].includes(type2));
-                                        whereText += `(${this.translateObjectPredicate(filter2[attr], alias, attr)})`;
+                                        assert(Object.keys(filter2[attr]).length === 1);
+                                        const predicate = Object.keys(filter2[attr])[0];
+                                        assert(predicate.startsWith('$'));
+                                        // 对属性上的谓词处理
+                                        whereText += ` (\`${alias}\`.\`${attr}\` ${this.translatePredicate(predicate, filter2[attr][predicate], type)})`;      
                                     }
                                 }
                                 else {
@@ -791,14 +856,9 @@ export abstract class SqlTranslator<ED extends EntityDict & BaseEntityDict> {
         };
 
         const where = translateInner(entity, './', filter);
-        if (extraWhere && where) {
-            return {
-                stmt: `${extraWhere} and ${where}`,
-                currentNumber,
-            };
-        }
+        
         return {
-            stmt: extraWhere || where,
+            stmt: where,
             currentNumber,
         };
     }
@@ -958,7 +1018,7 @@ export abstract class SqlTranslator<ED extends EntityDict & BaseEntityDict> {
         currentNumber: number;
     } {
         const { data, filter, sorter, indexFrom, count } = selection;
-        const { from: fromText, aliasDict, projectionRefAlias, extraWhere, filterRefAlias, currentNumber } = this.analyzeJoin(entity, {
+        const { from: fromText, aliasDict, projectionRefAlias, filterRefAlias, currentNumber } = this.analyzeJoin(entity, {
             projection: data,
             filter,
             sorter,
@@ -968,7 +1028,7 @@ export abstract class SqlTranslator<ED extends EntityDict & BaseEntityDict> {
 
         const { projText } = this.translateProjection(entity, data, aliasDict, projectionRefAlias);
 
-        const { stmt: filterText, currentNumber: currentNumber2 } = this.translateFilter(entity, selection, aliasDict, refAlias, currentNumber, extraWhere, option);
+        const { stmt: filterText, currentNumber: currentNumber2 } = this.translateFilter(entity, filter, aliasDict, refAlias, currentNumber, option);
 
         const sorterText = sorter && this.translateSorter(entity, sorter, aliasDict);
 
@@ -991,7 +1051,7 @@ export abstract class SqlTranslator<ED extends EntityDict & BaseEntityDict> {
 
     translateAggregate<T extends keyof ED, OP extends SqlSelectOption>(entity: T, aggregation: ED[T]['Aggregation'], option?: OP): string {
         const { data, filter, sorter, indexFrom, count } = aggregation;
-        const { from: fromText, aliasDict, projectionRefAlias, extraWhere, filterRefAlias, currentNumber } = this.analyzeJoin(entity, {
+        const { from: fromText, aliasDict, projectionRefAlias, filterRefAlias, currentNumber } = this.analyzeJoin(entity, {
             aggregation: data,
             filter,
             sorter,
@@ -1038,7 +1098,7 @@ export abstract class SqlTranslator<ED extends EntityDict & BaseEntityDict> {
             }
         }
 
-        const { stmt: filterText } = this.translateFilter(entity, aggregation, aliasDict, {}, currentNumber, extraWhere, option);
+        const { stmt: filterText } = this.translateFilter(entity, filter, aliasDict, {}, currentNumber, option);
 
         const sorterText = sorter && this.translateSorter(entity, sorter, aliasDict);
 
@@ -1047,13 +1107,13 @@ export abstract class SqlTranslator<ED extends EntityDict & BaseEntityDict> {
 
     translateCount<T extends keyof ED, OP extends SqlSelectOption>(entity: T, selection: Pick<ED[T]['Selection'], 'filter' | 'count'>, option?: OP): string {
         const { filter, count } = selection;
-        const { from: fromText, aliasDict, extraWhere, filterRefAlias, currentNumber } = this.analyzeJoin(entity, {
+        const { from: fromText, aliasDict, filterRefAlias, currentNumber } = this.analyzeJoin(entity, {
             filter,
         });
 
         const projText = 'count(1) cnt';
 
-        const { stmt: filterText } = this.translateFilter(entity, selection as ED[T]['Selection'], aliasDict, filterRefAlias, currentNumber, extraWhere, option);
+        const { stmt: filterText } = this.translateFilter(entity, filter, aliasDict, filterRefAlias, currentNumber, option);
 
         if (count) {
             const subQuerySql = this.populateSelectStmt('1', fromText, aliasDict, filterText, undefined, undefined, undefined, undefined, option, Object.assign({}, selection, { indexFrom: 0, count }) as ED[T]['Selection']);
@@ -1065,11 +1125,11 @@ export abstract class SqlTranslator<ED extends EntityDict & BaseEntityDict> {
     translateRemove<T extends keyof ED, OP extends SqlOperateOption>(entity: T, operation: ED[T]['Remove'], option?: OP): string {
         const { filter, sorter, indexFrom, count } = operation;
         assert(!sorter, '当前remove不支持sorter行为');
-        const { aliasDict, filterRefAlias, extraWhere, from: fromText, currentNumber } = this.analyzeJoin(entity, { filter, sorter });
+        const { aliasDict, filterRefAlias, from: fromText, currentNumber } = this.analyzeJoin(entity, { filter, sorter });
 
         const alias = aliasDict['./'];
 
-        const { stmt: filterText } = this.translateFilter(entity, operation, aliasDict, filterRefAlias, currentNumber, extraWhere, { includedDeleted: true });
+        const { stmt: filterText } = this.translateFilter(entity, filter, aliasDict, filterRefAlias, currentNumber, { includedDeleted: true });
 
         // const sorterText = sorter && sorter.length > 0 ? this.translateSorter(entity, sorter, aliasDict) : undefined;
 
@@ -1080,7 +1140,7 @@ export abstract class SqlTranslator<ED extends EntityDict & BaseEntityDict> {
         const { attributes } = this.schema[entity];
         const { filter, sorter, indexFrom, count, data } = operation;
         assert(!sorter, '当前update不支持sorter行为');
-        const { aliasDict, filterRefAlias, extraWhere, from: fromText, currentNumber } = this.analyzeJoin(entity, { filter, sorter });
+        const { aliasDict, filterRefAlias, from: fromText, currentNumber } = this.analyzeJoin(entity, { filter, sorter });
 
         const alias = aliasDict['./'];
 
@@ -1094,7 +1154,7 @@ export abstract class SqlTranslator<ED extends EntityDict & BaseEntityDict> {
             updateText += `\`${alias}\`.\`${attr}\` = ${value}`;
         }
 
-        const { stmt: filterText } = this.translateFilter(entity, operation, aliasDict, filterRefAlias, currentNumber, extraWhere);
+        const { stmt: filterText } = this.translateFilter(entity, filter, aliasDict, filterRefAlias, currentNumber);
         // const sorterText = sorter && this.translateSorter(entity, sorter, aliasDict);
 
         return this.populateUpdateStmt(updateText, fromText, aliasDict, filterText, /* sorterText */ undefined, indexFrom, count, option);
