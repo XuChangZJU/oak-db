@@ -838,7 +838,7 @@ export abstract class SqlTranslator<ED extends EntityDict & BaseEntityDict> {
                                         const predicate = Object.keys(filter2[attr])[0];
                                         assert(predicate.startsWith('$'));
                                         // 对属性上的谓词处理
-                                        whereText += ` (\`${alias}\`.\`${attr}\` ${this.translatePredicate(predicate, filter2[attr][predicate], type)})`;      
+                                        whereText += ` (\`${alias}\`.\`${attr}\` ${this.translatePredicate(predicate, filter2[attr][predicate], type2)})`;      
                                     }
                                 }
                                 else {
