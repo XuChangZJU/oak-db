@@ -60,7 +60,7 @@ export class MysqlStore<ED extends EntityDict & BaseEntityDict, Cxt extends Asyn
     }
     private formResult<T extends keyof ED>(entity: T, result: any): any {
         const schema = this.getSchema();
-        function resolveObject(r: Record<string, any>, path: string, value: any) {
+       /*  function resolveObject(r: Record<string, any>, path: string, value: any) {
             const i = path.indexOf(".");
             const bs = path.indexOf('[');
             const be = path.indexOf(']');
@@ -78,7 +78,7 @@ export class MysqlStore<ED extends EntityDict & BaseEntityDict, Cxt extends Asyn
                 }
                 resolveObject(r[attrHead], attrTail, value);
             }
-        }
+        } */
         function resolveAttribute<E extends keyof ED>(entity2: E, r: Record<string, any>, attr: string, value: any) {
             const { attributes, view } = schema[entity2];
             if (!view) {
@@ -158,6 +158,17 @@ export class MysqlStore<ED extends EntityDict & BaseEntityDict, Cxt extends Asyn
                                 r[attr] = true;
                             }
                             else {
+                                r[attr] = value;
+                            }
+                            break;
+                        }
+                        case 'decimal': {
+                            // mysql内部取回decimal是字符串
+                            if (typeof value === 'string') {
+                                r[attr] = parseFloat(value);
+                            }
+                            else {
+                                assert(typeof value === 'number');
                                 r[attr] = value;
                             }
                             break;

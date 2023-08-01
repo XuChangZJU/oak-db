@@ -211,6 +211,38 @@ describe('test mysqlstore', function () {
         await context.commit();
     });
 
+    it('test decimal', async () => {
+        const id = v4();
+        const context = new TestContext(store);
+        await context.begin();
+        await store.operate('house', {
+            id: v4(),
+            action: 'create',
+            data: [
+                {
+                    id,
+                    areaId: 'xc',
+                    ownerId: 'xc',
+                    district: '杭州',
+                    size: 77.5,
+                },
+            ]
+        }, context, {});
+        await context.commit();
+
+        const [ house ] = await store.select('house', {
+            data: {
+                id: 1,
+                size: 1,
+            },
+            filter: {
+                id,
+            },
+        }, context, {});
+        assert(typeof house.size === 'number');
+    });
+
+
     it('[1.1]子查询', async () => {
         const context = new TestContext(store);
         await context.begin();
