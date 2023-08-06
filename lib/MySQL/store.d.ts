@@ -10,6 +10,7 @@ export declare class MysqlStore<ED extends EntityDict & BaseEntityDict, Cxt exte
     protected aggregateSync<T extends keyof ED, OP extends SelectOption, Cxt extends SyncContext<ED>>(entity: T, aggregation: ED[T]['Aggregation'], context: Cxt, option: OP): AggregationResult<ED[T]['Schema']>;
     protected selectAbjointRow<T extends keyof ED, OP extends SelectOption>(entity: T, selection: ED[T]['Selection'], context: SyncContext<ED>, option: OP): Partial<ED[T]['Schema']>[];
     protected updateAbjointRow<T extends keyof ED, OP extends OperateOption>(entity: T, operation: ED[T]['Operation'], context: SyncContext<ED>, option: OP): number;
+    exec(script: string, txnId?: string): Promise<any>;
     connector: MySqlConnector;
     translator: MySqlTranslator<ED>;
     constructor(storageSchema: StorageSchema<ED>, configuration: MySQLConfiguration);

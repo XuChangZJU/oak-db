@@ -37,6 +37,9 @@ export class MysqlStore<ED extends EntityDict & BaseEntityDict, Cxt extends Asyn
     protected updateAbjointRow<T extends keyof ED, OP extends OperateOption>(entity: T, operation: ED[T]['Operation'], context: SyncContext<ED>, option: OP): number {
         throw new Error('MySQL store不支持同步更新数据，不应该跑到这儿');
     }
+    exec(script: string, txnId?: string) {
+        return this.connector.exec(script, txnId);
+    }
     connector: MySqlConnector;
     translator: MySqlTranslator<ED>;
     constructor(storageSchema: StorageSchema<ED>, configuration: MySQLConfiguration) {

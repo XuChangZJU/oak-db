@@ -765,7 +765,7 @@ export abstract class SqlTranslator<ED extends EntityDict & BaseEntityDict> {
                                 * by Xc 20230726
                                  */
                                 const refAlia = Object.keys(filterRefAlias).find(
-                                    ele => ele[0] === alias
+                                    ele => filterRefAlias[ele][0] === alias
                                 );
 
                                 const refAlia2 = refAlia || alias;      // alias一定是唯一的，可以用来作为node id
