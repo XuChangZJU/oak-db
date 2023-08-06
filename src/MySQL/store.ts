@@ -171,7 +171,7 @@ export class MysqlStore<ED extends EntityDict & BaseEntityDict, Cxt extends Asyn
                                 r[attr] = parseFloat(value);
                             }
                             else {
-                                assert(typeof value === 'number');
+                                assert(value === null || typeof value === 'number');
                                 r[attr] = value;
                             }
                             break;
