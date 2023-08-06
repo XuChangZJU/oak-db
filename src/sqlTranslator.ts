@@ -1177,7 +1177,7 @@ export abstract class SqlTranslator<ED extends EntityDict & BaseEntityDict> {
 
 
     escapeStringValue(value: string): string {
-        const result = `'${value.replace(/'/g, '\\\'')}'`;
+        const result = `'${value.replace(/'/g, '\\\'').replace(/"/g, '\\\"')}'`;
         return result;
     }
 }
