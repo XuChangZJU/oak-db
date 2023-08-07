@@ -119,6 +119,87 @@ describe('test mysqlstore', function () {
         await context.commit();
     });
 
+    it('test cascade update', async () => {
+        const context = new TestContext(store);
+        const userId = v4();
+        const tokenId1 = v4();
+        const tokenId2 = v4();
+        await context.begin();
+        await context.operate('user', {
+            id: v4(),
+            action: 'create',
+            data: {
+                id: userId,
+                name: 'xxxc',
+                nickname: 'ddd',
+                token$player: [{
+                    id: v4(),
+                    action: 'create',
+                    data: {
+                        id: tokenId1,
+                        env: {
+                            type: 'web',
+                        },
+                        applicationId: v4(),
+                        userId: v4(),
+                        entity: 'mobile',
+                        entityId: v4(),
+                    }
+                }]
+            }
+        } as EntityDict['user']['CreateSingle'], {});
+
+        await context.operate('token', {
+            id: v4(),
+            action: 'create',
+            data: {
+                id: tokenId2,
+                env: {
+                    type: 'web',
+                },
+                applicationId: v4(),
+                userId: v4(),
+                playerId: v4(),
+                entity: 'mobile',
+                entityId: v4(),
+            } as EntityDict['token']['CreateSingle']['data'],
+        }, {});
+
+        await context.commit();
+
+        // cascade update token of userId
+        await context.operate('user', {
+            id: v4(),
+            action: 'update',
+            data: {
+                name: 'xc',
+                token$player: [{
+                    id: v4(),
+                    action: 'update',
+                    data: {
+                        entity: 'email',
+                    }
+                }]
+            },
+            filter: {
+                id: userId,
+            },
+        }, {});
+
+        const [row] = await context.select('token', {
+            data: {
+                id: 1,
+                entity: 1,
+                entityId: 1,
+            },
+            filter: {
+                id: tokenId2,
+            }
+        }, {});
+
+        assert(row.entity === 'mobile');
+    });
+
     it('test delete', async () => {
         const context = new TestContext(store);
         const tokenId = v4();
@@ -230,7 +311,7 @@ describe('test mysqlstore', function () {
         }, context, {});
         await context.commit();
 
-        const [ house ] = await store.select('house', {
+        const [house] = await store.select('house', {
             data: {
                 id: 1,
                 size: 1,
@@ -478,7 +559,7 @@ describe('test mysqlstore', function () {
             filter: {
                 "#id": 'node-1',
                 $and: [
-                    {     
+                    {
                         application$system: {
                             '#sqp': 'not in',
                             $expr: {
@@ -1131,7 +1212,7 @@ describe('test mysqlstore', function () {
         );
     });
 
-    it('[1.10]json insert/select', async() => {
+    it('[1.10]json insert/select', async () => {
         const context = new TestContext(store);
         await context.begin();
 
@@ -1166,7 +1247,7 @@ describe('test mysqlstore', function () {
         console.log(JSON.stringify(result));
     });
 
-    it('[1.11]json as filter', async() => {
+    it('[1.11]json as filter', async () => {
         const context = new TestContext(store);
         await context.begin();
 
@@ -1230,12 +1311,12 @@ describe('test mysqlstore', function () {
 
         await context.commit();
         // console.log(JSON.stringify(row));
-        assert (row.length === 1, JSON.stringify(row));
-        assert (row2.length === 0, JSON.stringify(row2));
+        assert(row.length === 1, JSON.stringify(row));
+        assert(row2.length === 0, JSON.stringify(row2));
     });
 
 
-    it('[1.11.2]json filter on top level', async() => {
+    it('[1.11.2]json filter on top level', async () => {
         const context = new TestContext(store);
         await context.begin();
 
@@ -1282,12 +1363,12 @@ describe('test mysqlstore', function () {
             }
         }, context, {});
         // console.log(JSON.stringify(row));
-        assert (row.length === 1, JSON.stringify(row));
+        assert(row.length === 1, JSON.stringify(row));
         console.log(JSON.stringify(row));
-        assert (row2.length === 0, JSON.stringify(row2));
+        assert(row2.length === 0, JSON.stringify(row2));
     });
 
-    it('[1.12]complicated json filter', async() => {
+    it('[1.12]complicated json filter', async () => {
         const context = new TestContext(store);
         await context.begin();
 
@@ -1625,7 +1706,7 @@ describe('test mysqlstore', function () {
         }, {});
         assert(r3.length === 0);
 
-        
+
         const r4 = await context.select('system', {
             data: {
                 id: 1,
@@ -1644,6 +1725,9 @@ describe('test mysqlstore', function () {
                 id: 1,
             },
             filter: {
+                id: {
+                    $in: [id1, id2, id3],
+                },
                 application$system: {
                 },
             },
@@ -1657,6 +1741,9 @@ describe('test mysqlstore', function () {
                 id: 1,
             },
             filter: {
+                id: {
+                    $in: [id1, id2, id3],
+                },
                 application$system: {
                     '#sqp': 'not in',
                 },
@@ -1670,6 +1757,9 @@ describe('test mysqlstore', function () {
                 id: 1,
             },
             filter: {
+                id: {
+                    $in: [id1, id2, id3],
+                },
                 application$system: {
                     '#sqp': 'all',
                 },
@@ -1682,6 +1772,9 @@ describe('test mysqlstore', function () {
                 id: 1,
             },
             filter: {
+                id: {
+                    $in: [id1, id2, id3],
+                },
                 application$system: {
                     '#sqp': 'not all',
                 },

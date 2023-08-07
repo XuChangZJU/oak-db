@@ -737,7 +737,7 @@ export abstract class SqlTranslator<ED extends EntityDict & BaseEntityDict> {
                             whereText += ')';
                         }
                         else if (attr === '$text') {
-                            whereText += `(${this.translateFullTextSearch(filter2[attr], entity, alias)})`;
+                            whereText += `(${this.translateFullTextSearch(filter2[attr], entity2, alias)})`;
                         }
                         else if (attr.toLowerCase().startsWith(EXPRESSION_PREFIX)) {
                             // expression
