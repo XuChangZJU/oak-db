@@ -810,7 +810,7 @@ export abstract class SqlTranslator<ED extends EntityDict & BaseEntityDict> {
                                     data: {
                                         id: 1,
                                     },
-                                    filter: combineFilters([joinFilter, filter2[attr]]),
+                                    filter: combineFilters(subEntity, this.schema, [joinFilter, filter2[attr]]),
                                     indexFrom: 0,
                                     count: 1,
                                 }, currentNumber, filterRefAlias, option);
