@@ -1,6 +1,6 @@
 {
 	"name": "oak-db",
-	"version": "3.0.0",
+	"version": "3.0.1",
 	"description": "oak-db",
 	"main": "lib/index",
 	"author": {
@@ -18,7 +18,7 @@
 		"lodash": "^4.17.21",
 		"mysql": "^2.18.1",
 		"mysql2": "^2.3.3",
-		"oak-domain": "^3.0.0",
+		"oak-domain": "file:../oak-domain",
 		"uuid": "^8.3.2"
 	},
 	"license": "ISC",
@@ -30,7 +30,7 @@
 		"@types/uuid": "^8.3.4",
 		"cross-env": "^7.0.3",
 		"mocha": "^10.0.0",
-		"oak-general-business": "^3.0.0",
+		"oak-general-business": "file:../oak-general-business",
 		"ts-node": "~10.9.1",
 		"tslib": "^2.4.0",
 		"typescript": "~4.7.4"
