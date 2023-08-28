@@ -6,6 +6,7 @@ import { MysqlStore } from '../src/MySQL/store';
 import { EntityDict, storageSchema } from './test-app-domain';
 import { filter } from 'lodash';
 import { generateNewIdAsync } from 'oak-domain/lib/utils/uuid';
+import { WebConfig } from './test-app-domain/Application/Schema';
 
 describe('test mysqlstore', function () {
     this.timeout(100000);
@@ -1216,11 +1217,12 @@ describe('test mysqlstore', function () {
         const context = new TestContext(store);
         await context.begin();
 
+        let id = await generateNewIdAsync();
         await context.operate('application', {
             id: await generateNewIdAsync(),
             action: 'create',
             data: {
-                id: await generateNewIdAsync(),
+                id,
                 name: 'xuchang',
                 description: 'tt',
                 type: 'web',
@@ -1232,7 +1234,7 @@ describe('test mysqlstore', function () {
             }
         }, {});
 
-        const result = await context.select('application', {
+        let result = await context.select('application', {
             data: {
                 id: 1,
                 name: 1,
@@ -1242,9 +1244,50 @@ describe('test mysqlstore', function () {
                         appId: 1,
                     }
                 },
+            },
+            filter: {
+                id,
+            },
+        }, {});
+        // console.log(JSON.stringify(result));
+
+        id = await generateNewIdAsync();
+        await context.operate('application', {
+            id: await generateNewIdAsync(),
+            action: 'create',
+            data: {
+                id,
+                name: 'xuchang',
+                description: 'tt',
+                type: 'web',
+                systemId: 'system',
+                config: {
+                    type: 'web',
+                    wechat: {
+                        appId: 'aaaa\\nddddd',
+                        appSecret: '',
+                    },
+                    passport: ['email', 'mobile'],
+                },
             }
         }, {});
-        console.log(JSON.stringify(result));
+
+        result = await context.select('application', {
+            data: {
+                id: 1,
+                name: 1,
+                config: {
+                    passport: [undefined, 1],
+                    wechat: {
+                        appId: 1,
+                    }
+                },
+            },
+            filter: {
+                id,
+            },
+        }, {});
+        console.log((result[0].config as WebConfig)!.wechat!.appId);
     });
 
     it('[1.11]json as filter', async () => {
@@ -1327,7 +1370,7 @@ describe('test mysqlstore', function () {
             data: {
                 id,
                 destEntity: '1.12',
-                path: '',
+                paths: [''],
                 deActions: ['1.12'],
             }
         }, context, {});

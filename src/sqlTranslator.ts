@@ -1,4 +1,5 @@
 import assert from 'assert';
+import SqlString from 'sqlstring';
 import { assign, cloneDeep, identity, intersection, keys, set } from 'lodash';
 import { Attribute, EntityDict, EXPRESSION_PREFIX, Index, OperateOption, 
     Q_FullTextValue, Ref, RefOrExpression, SelectOption, StorageSchema, SubQueryPredicateMetadata } from "oak-domain/lib/types";
@@ -1177,7 +1178,7 @@ export abstract class SqlTranslator<ED extends EntityDict & BaseEntityDict> {
 
 
     escapeStringValue(value: string): string {
-        const result = `'${value.replace(/'/g, '\\\'').replace(/"/g, '\\\"')}'`;
+        const result = SqlString.escape(value);
         return result;
     }
 }
