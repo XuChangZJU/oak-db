@@ -1,6 +1,6 @@
 {
 	"name": "oak-db",
-	"version": "3.0.1",
+	"version": "3.0.2",
 	"description": "oak-db",
 	"main": "lib/index",
 	"author": {
