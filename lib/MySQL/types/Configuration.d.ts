@@ -1,4 +1,4 @@
-export declare type MySQLConfiguration = {
+export type MySQLConfiguration = {
     host: string;
     user: string;
     password: string;
@@ -6,6 +6,6 @@ export declare type MySQLConfiguration = {
     charset: 'utf8mb4_general_ci';
     connectionLimit: number;
 };
-export declare type Configuration = {
+export type Configuration = {
     mysql: MySQLConfiguration;
 };
