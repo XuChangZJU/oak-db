@@ -541,7 +541,7 @@ export abstract class SqlTranslator<ED extends EntityDict & BaseEntityDict> {
         else if (aggregation) {
             for (const k in aggregation) {
                 analyzeProjectionNode<T>({
-                    node: aggregation[k],
+                    node: aggregation[k] as ED[T]['Selection']['data'],
                     path: './',
                     entityName: entity,
                     alias,
