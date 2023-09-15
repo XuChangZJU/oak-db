@@ -266,43 +266,19 @@ export class MysqlStore<ED extends EntityDict & BaseEntityDict, Cxt extends Asyn
                 const { data } = operation as ED[T]['Create'];
                 const sql = translator.translateInsert(entity, data instanceof Array ? data : [data]);
                 await connector.exec(sql, txn);
-                if (!option?.dontCollect) {
-                    context.opRecords.push({
-                        a: 'c',
-                        d: data as any,
-                        e: entity,
-                    });
-                }
                 return data instanceof Array ? data.length : 1;
             }
             case 'remove': {
                 const sql = translator.translateRemove(entity, operation as ED[T]['Remove'], option);
                 await connector.exec(sql, txn);
-
                 // todo 这里对sorter和indexfrom/count的支持不完整
-                if (!option?.dontCollect) {
-                    context.opRecords.push({
-                        a: 'r',
-                        e: entity,
-                        f: (operation as ED[T]['Remove']).filter,
-                    });
-                }
                 return 1;
             }
             default: {
                 assert(!['select', 'download', 'stat'].includes(action));
                 const sql = translator.translateUpdate(entity, operation as ED[T]['Update'], option);
                 await connector.exec(sql, txn);
-
                 // todo 这里对sorter和indexfrom/count的支持不完整
-                if (!option?.dontCollect) {
-                    context.opRecords.push({
-                        a: 'u',
-                        e: entity,
-                        d: (operation as ED[T]['Update']).data,
-                        f: (operation as ED[T]['Update']).filter,
-                    });
-                }
                 return 1;
             }
         }
