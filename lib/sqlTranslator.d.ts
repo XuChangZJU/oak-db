@@ -20,7 +20,7 @@ export declare abstract class SqlTranslator<ED extends EntityDict & BaseEntityDi
     protected abstract translateObjectPredicate(predicate: Record<string, any>, alias: string, attr: string): string;
     protected abstract populateSelectStmt<T extends keyof ED, OP extends SqlSelectOption>(projectionText: string, fromText: string, aliasDict: Record<string, string>, filterText: string, sorterText?: string, groupByText?: string, indexFrom?: number, count?: number, option?: OP, selection?: ED[T]['Selection'], aggregation?: ED[T]['Aggregation']): string;
     protected abstract populateUpdateStmt<OP extends SqlOperateOption>(updateText: string, fromText: string, aliasDict: Record<string, string>, filterText: string, sorterText?: string, indexFrom?: number, count?: number, option?: OP): string;
-    protected abstract populateRemoveStmt<OP extends SqlOperateOption>(removeText: string, fromText: string, aliasDict: Record<string, string>, filterText: string, sorterText?: string, indexFrom?: number, count?: number, option?: OP): string;
+    protected abstract populateRemoveStmt<OP extends SqlOperateOption>(updateText: string, fromText: string, aliasDict: Record<string, string>, filterText: string, sorterText?: string, indexFrom?: number, count?: number, option?: OP): string;
     protected abstract translateExpression<T extends keyof ED>(entity: T, alias: string, expression: RefOrExpression<keyof ED[T]['OpSchema']>, refDict: Record<string, [string, keyof ED]>): string;
     private getStorageName;
     translateInsert<T extends keyof ED>(entity: T, data: ED[T]['CreateMulti']['data']): string;

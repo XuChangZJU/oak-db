@@ -2,7 +2,8 @@ import assert from 'assert';
 import SqlString from 'sqlstring';
 import { assign, cloneDeep, identity, intersection, keys, set } from 'lodash';
 import { Attribute, EntityDict, EXPRESSION_PREFIX, Index, OperateOption, 
-    Q_FullTextValue, Ref, RefOrExpression, SelectOption, StorageSchema, SubQueryPredicateMetadata } from "oak-domain/lib/types";
+    Q_FullTextValue, Ref, RefOrExpression, SelectOption, StorageSchema, SubQueryPredicateMetadata,
+    TriggerDataAttribute, CreateAtAttribute, UpdateAtAttribute, DeleteAtAttribute, SeqAttribute, TriggerUuidAttribute } from "oak-domain/lib/types";
 import { EntityDict as BaseEntityDict } from 'oak-domain/lib/base-app-domain';
 import { DataType } from "oak-domain/lib/types/schema/DataTypes";
 import { judgeRelation } from 'oak-domain/lib/store/relation';
@@ -31,26 +32,29 @@ export abstract class SqlTranslator<ED extends EntityDict & BaseEntityDict> {
                         length: 36,
                     },
                 } as Attribute,
-                $$seq$$: {
+                [SeqAttribute]: {
                     type: 'sequence',
                     sequenceStart: 10000,
                 } as Attribute,
-                $$createAt$$: {
+                [CreateAtAttribute]: {
                     type: 'datetime',
                     notNull: true,
                 } as Attribute,
-                $$updateAt$$: {
+                [UpdateAtAttribute]: {
                     type: 'datetime',
                     notNull: true,
                 } as Attribute,
-                $$deleteAt$$: {
+                [DeleteAtAttribute]: {
                     type: 'datetime',
                 } as Attribute,
-                $$triggerData$$: {
+                [TriggerDataAttribute]: {
                     type: 'object',
                 } as Attribute,
-                $$triggerTimestamp$$: {
-                    type: 'datetime',
+                [TriggerUuidAttribute]: {
+                    type: 'char',
+                    params: {
+                        length: 36,
+                    },
                 } as Attribute,
             });
 
@@ -59,25 +63,23 @@ export abstract class SqlTranslator<ED extends EntityDict & BaseEntityDict> {
                 {
                     name: `${entity}_create_at_auto_create`,
                     attributes: [{
-                        name: '$$createAt$$',
+                        name: CreateAtAttribute,
                     }, {
-                        name: '$$deleteAt$$',
+                        name: DeleteAtAttribute,
                     }]
                 }, {
                     name: `${entity}_update_at_auto_create`,
                     attributes: [{
-                        name: '$$updateAt$$',
+                        name: UpdateAtAttribute,
                     }, {
-                        name: '$$deleteAt$$',
+                        name: DeleteAtAttribute,
                     }],
                 }, {
-                    name: `${entity}_trigger_ts_auto_create`,
+                    name: `${entity}_trigger_uuid`,
                     attributes: [{
-                        name: '$$triggerTimestamp$$',
-                    }, {
-                        name: '$$deleteAt$$',
-                    }],
-                }
+                        name: TriggerUuidAttribute,
+                    }]
+                }, 
             ];
 
             // 增加外键等相关属性上的索引
@@ -204,7 +206,7 @@ export abstract class SqlTranslator<ED extends EntityDict & BaseEntityDict> {
         option?: OP): string;
 
     protected abstract populateRemoveStmt<OP extends SqlOperateOption>(
-        removeText: string,
+        updateText: string,
         fromText: string,
         aliasDict: Record<string, string>,
         filterText: string,
@@ -1124,7 +1126,7 @@ export abstract class SqlTranslator<ED extends EntityDict & BaseEntityDict> {
     }
 
     translateRemove<T extends keyof ED, OP extends SqlOperateOption>(entity: T, operation: ED[T]['Remove'], option?: OP): string {
-        const { filter, sorter, indexFrom, count } = operation;
+        const { data, filter, sorter, indexFrom, count } = operation;
         assert(!sorter, '当前remove不支持sorter行为');
         const { aliasDict, filterRefAlias, from: fromText, currentNumber } = this.analyzeJoin(entity, { filter, sorter });
 
@@ -1134,7 +1136,18 @@ export abstract class SqlTranslator<ED extends EntityDict & BaseEntityDict> {
 
         // const sorterText = sorter && sorter.length > 0 ? this.translateSorter(entity, sorter, aliasDict) : undefined;
 
-        return this.populateRemoveStmt(alias, fromText, aliasDict, filterText, /* sorterText */ undefined, indexFrom, count, option);
+        const { attributes } = this.schema[entity];
+        let updateText = '';
+        for (const attr in data) {
+            if (updateText) {
+                updateText += ',';
+            }
+            // delete只支持对volatile trigger的metadata域赋值
+            assert([TriggerDataAttribute, TriggerUuidAttribute].includes(attr));
+            const value = this.translateAttrValue(attributes[attr].type as DataType, data[attr]);
+            updateText += `\`${alias}\`.\`${attr}\` = ${value}`;
+        }
+        return this.populateRemoveStmt(updateText, fromText, aliasDict, filterText, /* sorterText */ undefined, indexFrom, count, option);
     }
 
     translateUpdate<T extends keyof ED, OP extends SqlOperateOption>(entity: T, operation: ED[T]['Update'], option?: OP): string {
@@ -1155,7 +1168,7 @@ export abstract class SqlTranslator<ED extends EntityDict & BaseEntityDict> {
             updateText += `\`${alias}\`.\`${attr}\` = ${value}`;
         }
 
-        const { stmt: filterText } = this.translateFilter(entity, filter, aliasDict, filterRefAlias, currentNumber);
+        const { stmt: filterText } = this.translateFilter(entity, filter, aliasDict, filterRefAlias, currentNumber, option);
         // const sorterText = sorter && this.translateSorter(entity, sorter, aliasDict);
 
         return this.populateUpdateStmt(updateText, fromText, aliasDict, filterText, /* sorterText */ undefined, indexFrom, count, option);

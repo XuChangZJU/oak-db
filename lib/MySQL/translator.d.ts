@@ -104,5 +104,5 @@ export declare class MySqlTranslator<ED extends EntityDict & BaseEntityDict> ext
     protected translateExpression<T extends keyof ED>(entity: T, alias: string, expression: RefOrExpression<keyof ED[T]["OpSchema"]>, refDict: Record<string, [string, keyof ED]>): string;
     protected populateSelectStmt<T extends keyof ED>(projectionText: string, fromText: string, aliasDict: Record<string, string>, filterText: string, sorterText?: string, groupByText?: string, indexFrom?: number, count?: number, option?: MySqlSelectOption): string;
     protected populateUpdateStmt(updateText: string, fromText: string, aliasDict: Record<string, string>, filterText: string, sorterText?: string, indexFrom?: number, count?: number, option?: MysqlOperateOption): string;
-    protected populateRemoveStmt(removeText: string, fromText: string, aliasDict: Record<string, string>, filterText: string, sorterText?: string, indexFrom?: number, count?: number, option?: MysqlOperateOption): string;
+    protected populateRemoveStmt(updateText: string, fromText: string, aliasDict: Record<string, string>, filterText: string, sorterText?: string, indexFrom?: number, count?: number, option?: MysqlOperateOption): string;
 }

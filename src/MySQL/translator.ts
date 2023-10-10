@@ -963,10 +963,11 @@ export class MySqlTranslator<ED extends EntityDict & BaseEntityDict> extends Sql
 
         return sql;
     }
-    protected populateRemoveStmt(removeText: string, fromText: string, aliasDict: Record<string, string>, filterText: string, sorterText?: string, indexFrom?: number, count?: number, option?: MysqlOperateOption): string {
+    protected populateRemoveStmt(updateText: string, fromText: string, aliasDict: Record<string, string>, filterText: string, sorterText?: string, indexFrom?: number, count?: number, option?: MysqlOperateOption): string {
         // todo using index
         const alias = aliasDict['./'];
         if (option?.deletePhysically) {
+            assert(!updateText, 'physically delete does not support setting trigger data');
             let sql = `delete ${alias} from ${fromText} `;
             if (filterText) {
                 sql += ` where ${filterText}`;
@@ -982,7 +983,9 @@ export class MySqlTranslator<ED extends EntityDict & BaseEntityDict> extends Sql
             return sql;
         }
         const now = Date.now();
-        let sql = `update ${fromText} set \`${alias}\`.\`$$deleteAt$$\` = '${now}'`;
+
+        const updateText2 = updateText ? `${updateText}, \`${alias}\`.\`$$deleteAt$$\` = '${now}'` : `\`${alias}\`.\`$$deleteAt$$\` = '${now}'`;
+        let sql = `update ${fromText} set ${updateText2}`;
         if (filterText) {
             sql += ` where ${filterText}`;
         }
