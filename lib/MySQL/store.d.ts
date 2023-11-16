@@ -23,6 +23,7 @@ export declare class MysqlStore<ED extends EntityDict & BaseEntityDict, Cxt exte
     protected updateAbjointRowAsync<T extends keyof ED>(entity: T, operation: ED[T]['Operation'], context: AsyncContext<ED>, option?: MysqlOperateOption): Promise<number>;
     operate<T extends keyof ED>(entity: T, operation: ED[T]['Operation'], context: Cxt, option: OperateOption): Promise<OperationResult<ED>>;
     select<T extends keyof ED>(entity: T, selection: ED[T]['Selection'], context: Cxt, option: SelectOption): Promise<Partial<ED[T]['Schema']>[]>;
+    protected countAsync<T extends keyof ED>(entity: T, selection: Pick<ED[T]['Selection'], 'filter' | 'count'>, context: AsyncContext<ED>, option: SelectOption): Promise<number>;
     count<T extends keyof ED>(entity: T, selection: Pick<ED[T]['Selection'], 'filter' | 'count'>, context: Cxt, option: SelectOption): Promise<number>;
     begin(option?: TxnOption): Promise<string>;
     commit(txnId: string): Promise<void>;

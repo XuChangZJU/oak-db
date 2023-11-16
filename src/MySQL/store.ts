@@ -292,11 +292,14 @@ export class MysqlStore<ED extends EntityDict & BaseEntityDict, Cxt extends Asyn
         const result = await super.selectAsync(entity, selection, context, option);
         return result;
     }
-    async count<T extends keyof ED>(entity: T, selection: Pick<ED[T]['Selection'], 'filter' | 'count'>, context: Cxt, option: SelectOption): Promise<number> {
+    protected async countAsync<T extends keyof ED>(entity: T, selection: Pick<ED[T]['Selection'], 'filter' | 'count'>, context: AsyncContext<ED>, option: SelectOption): Promise<number> {
         const sql = this.translator.translateCount(entity, selection, option);
 
         const result = await this.connector.exec(sql, context.getCurrentTxnId());
         return result[0].cnt as number;
+    }
+    async count<T extends keyof ED>(entity: T, selection: Pick<ED[T]['Selection'], 'filter' | 'count'>, context: Cxt, option: SelectOption) {
+        return this.countAsync(entity, selection, context, option);
     }
     async begin(option?: TxnOption): Promise<string> {
         const txn = await this.connector.startTransaction(option);
