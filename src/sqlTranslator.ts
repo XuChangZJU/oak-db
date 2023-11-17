@@ -1118,7 +1118,7 @@ export abstract class SqlTranslator<ED extends EntityDict & BaseEntityDict> {
 
         const { stmt: filterText } = this.translateFilter(entity, filter, aliasDict, filterRefAlias, currentNumber, option);
 
-        if (count) {
+        if (count && count > 0) {
             const subQuerySql = this.populateSelectStmt('1', fromText, aliasDict, filterText, undefined, undefined, undefined, undefined, option, Object.assign({}, selection, { indexFrom: 0, count }) as ED[T]['Selection']);
             return `select count(1) cnt from (${subQuerySql}) __tmp`;
         }
