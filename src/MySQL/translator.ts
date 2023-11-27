@@ -441,7 +441,7 @@ export class MySqlTranslator<ED extends EntityDict & BaseEntityDict> extends Sql
                     if (typeof o[key] !== 'object') {
                         if (o[key] !== null && o[key] !== undefined) {
                             if (stmt) {
-                                stmt += ', ';
+                                stmt += ' and ';
                             }
                             stmt += `${alias}.${attr}->>"$${p2}"`;
                             if (typeof o[key] === 'string') {
