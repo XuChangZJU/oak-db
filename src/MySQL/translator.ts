@@ -465,7 +465,8 @@ export class MySqlTranslator<ED extends EntityDict & BaseEntityDict> extends Sql
                     }
                     else {
                         // 继续子对象解构
-                        const part = translateInner(o[attr2], `${p}.${attr2}`);
+                        const attr3 = attr2.startsWith('.') ? attr2.slice(1) : attr2;
+                        const part = translateInner(o[attr2], `${p}.${attr3}`);
                         if (stmt2) {
                             stmt2 += ' and ';
                         }

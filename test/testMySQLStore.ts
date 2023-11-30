@@ -1443,6 +1443,55 @@ describe('test mysqlstore', function () {
         assert(row2.length === 0, JSON.stringify(row2));
     });
 
+    it('[1.11.3]json escape', async () => {
+        const context = new TestContext(store);
+        await context.begin();
+
+        const id = await generateNewIdAsync();
+        await store.operate('oper', {
+            id: await generateNewIdAsync(),
+            action: 'create',
+            data: {
+                id,
+                action: 'test',
+                data: {
+                    $or: [{
+                        name: 'xc',
+                    }, {
+                        name: {
+                            $includes: 'xc',
+                        }
+                    }],
+                },
+                targetEntity: 'bbb',
+            }
+        }, context, {});
+
+        process.env.NODE_ENV = 'development';
+        const row = await store.select('oper', {
+            data: {
+                id: 1,
+                data: {
+                    name: 1,
+                    price: 1,
+                },
+            },
+            filter: {
+                id,
+                data: {
+                    '.$or': {
+                        $contains: {
+                            name: 'xc',
+                        },
+                    },
+                },
+            }
+        }, context, {});
+
+        await context.commit();
+        assert(row.length === 1);
+    });
+
     it('[1.12]complicated json filter', async () => {
         const context = new TestContext(store);
         await context.begin();
