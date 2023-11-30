@@ -370,6 +370,17 @@ describe('test mysqlstore', function () {
             }
         }, context, {});
 
+        const id2 = v4();
+        await store.operate('user', {
+            id: v4(),
+            action: 'create',
+            data: {
+                id: id2,
+                name: 'xzw',
+                nickname: 'xzw22',
+            }
+        }, context, {});
+
         process.env.NODE_ENV = 'development';
         const users = await store.select('user', {
             data: {
@@ -378,7 +389,9 @@ describe('test mysqlstore', function () {
                 nickname: 1,
             },
             filter: {
-                // '#id': 'node-123',
+                id: {
+                    $in: [id, id2],
+                },
                 $expr: {
                     $eq: [{
                         '#attr': 'name',
@@ -386,12 +399,34 @@ describe('test mysqlstore', function () {
                         "#attr": 'nickname',
                     }]
                 },
-                id,
+            },
+        }, context, {});
+        const users2 = await store.select('user', {
+            data: {
+                id: 1,
+                name: 1,
+                nickname: 1,
+            },
+            filter: {
+                id: {
+                    $in: [id, id2],
+                },
+                $expr: {
+                    $eq: [{
+                        $mod: [
+                            {
+                                '#attr': '$$seq$$',
+                            },
+                            2,
+                        ],
+                    }, 0]
+                },
             },
         }, context, {});
         process.env.NODE_ENV = undefined;
 
         assert(users.length === 1);
+        assert(users2.length === 1);
         await context.commit();
     });
 
@@ -1369,8 +1404,7 @@ describe('test mysqlstore', function () {
             action: 'create',
             data: {
                 id,
-                destEntity: '1.12',
-                paths: [''],
+                pathId: await generateNewIdAsync(),
                 deActions: ['1.12'],
             }
         }, context, {});
@@ -1381,7 +1415,6 @@ describe('test mysqlstore', function () {
             data: {
                 id: 1,
                 deActions: 1,
-                destEntity: 1,
             },
             filter: {
                 id,
@@ -1396,7 +1429,6 @@ describe('test mysqlstore', function () {
             data: {
                 id: 1,
                 deActions: 1,
-                destEntity: 1,
             },
             filter: {
                 id,
@@ -1548,6 +1580,39 @@ describe('test mysqlstore', function () {
             }
         }, context, {});
 
+        /**
+         * 带$or的查询
+         */
+        process.env.NODE_ENV = 'development';
+        const row8 = await store.select('oper', {
+            data: {
+                id: 1,
+                data: {
+                    name: 1,
+                    price: 1,
+                },
+            },
+            filter: {
+                data: {
+                    $or: [
+                        {
+                            name: {
+                                $includes: 'xc',
+                            },
+                        },
+                        {
+                            name: {
+                                $includes: 'xzw',
+                            }
+                        }
+                    ],
+                    price: {
+                        $overlaps: [200, 400, 800],
+                    },
+                }
+            }
+        }, context, {});
+
         await context.commit();
         assert(row.length === 1);
         assert(row2.length === 0);
@@ -1556,6 +1621,7 @@ describe('test mysqlstore', function () {
         assert(row5.length === 1);
         assert(row6.length === 0);
         assert(row7.length === 1);
+        assert(row8.length === 1);
         // console.log(JSON.stringify(row7));
     });
 

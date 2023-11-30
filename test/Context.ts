@@ -1,6 +1,9 @@
 import { AsyncContext } from 'oak-domain/lib/store/AsyncRowStore';
 import { EntityDict } from './test-app-domain';
 export class TestContext extends AsyncContext<EntityDict> {
+    initialize(data: any): Promise<void> {
+        throw new Error('Method not implemented.');
+    }
     openRootMode(): () => void {
         return () => undefined;
     }

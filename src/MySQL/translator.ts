@@ -382,84 +382,120 @@ export class MySqlTranslator<ED extends EntityDict & BaseEntityDict> extends Sql
     }
 
     protected translateObjectPredicate(predicate: Record<string, any>, alias: string, attr: string): string {
-        let stmt = '';
-        const translatePredicate = (o: Record<string, any>, p: string) => {
-            const predicate2 = Object.keys(o)[0];
-            if (predicate2.startsWith('$')) {
-                if (stmt)  {
-                    stmt += ' and ';
-                }
-                // todo
-                if (predicate2 === '$contains') {
-                    // json_contains，多值的包含关系
-                    const value = JSON.stringify(o[predicate2]);
-                    stmt += `JSON_CONTAINS(${alias}.${attr}->>"$${p}", CAST('${value}' AS JSON)) `;
-                }
-                else if (predicate2 === '$overlaps') {
-                    // json_overlaps，多值的交叉关系
-                    const value = JSON.stringify(o[predicate2]);
-                    stmt += `JSON_OVERLAPS(${alias}.${attr}->>"$${p}", CAST('${value}' AS JSON)) `;
-                }
-                else {
-                    stmt += `${alias}.${attr}->>"$${p}" ${this.translatePredicate(predicate2, o[predicate2])}`;
-                }
-            }
-            else {
-                // 继续子对象解构
-                translateInner(o, p);
-            }
-        };
-
-        const translateInner = (o: Record<string, any> | Array<any>, p: string) => {
+        const translateInner = (o: Record<string, any> | Array<any> | string | number | boolean, p: string) => {
+            let stmt2 = '';
             if (o instanceof Array) {
                 o.forEach(
-                    (item, idx) => {
-                        const p2 = `${p}[${idx}]`;
-                        if (typeof item !== 'object') {
-                            if (item !== null && item !== undefined) {
-                                if (stmt) {
-                                    stmt += ' and ';
-                                }
-                                stmt += `${alias}.${attr}->>"$${p2}"`;
-                                if (typeof item === 'string') {
-                                    stmt += ` = '${item}'`;
-                                }
-                                else {
-                                    stmt += ` = ${item}`;
-                                }
+                    (ele: any, idx) => {
+                        if (ele !== undefined && ele !== null) {
+                            const part = translateInner(ele, `${p}[${idx}]`);
+                            if (stmt2) {
+                                stmt2 += ' and ';
                             }
-                        }
-                        else {
-                            translatePredicate(item, p2);
+                            stmt2 += `${part}`;
                         }
                     }
-                )
+                );
             }
-            else {
-                for (const key in o) {
-                    const p2 = `${p}.${key}`;
-                    if (typeof o[key] !== 'object') {
-                        if (o[key] !== null && o[key] !== undefined) {
-                            if (stmt) {
-                                stmt += ', ';
+            else if (typeof o === 'object') {
+                for (const attr2 in o) {
+                    if (attr2 === '$and') {
+                        o[attr2].forEach(
+                            (ele: any) => {
+                                const part = translateInner(ele, p);
+                                if (stmt2) {
+                                    stmt2 += ' and ';
+                                }
+                                stmt2 += `${part}`;
                             }
-                            stmt += `${alias}.${attr}->>"$${p2}"`;
-                            if (typeof o[key] === 'string') {
-                                stmt += ` = '${o[key]}'`;
+                        );
+                    }
+                    else if (attr2 === '$or') {
+                        let stmtOr = '';
+                        o[attr2].forEach(
+                            (ele: any) => {
+                                const part = translateInner(ele, p);
+                                if (stmtOr) {
+                                    stmtOr += ' or ';
+                                }
+                                stmtOr += `${part}`;
                             }
-                            else {
-                                stmt += ` = ${o[key]}`;
-                            }
+                        );
+                        if (stmt2) {
+                            stmt2 += ' and ';
+                        }
+                        stmt2 += `(${stmtOr})`;
+                    }
+                    else if (attr2 === '$contains') {
+                        // json_contains，多值的包含关系
+                        const value = JSON.stringify(o[attr2]);
+                        if (stmt2) {
+                            stmt2 += ' and ';
+                        }
+                        if (p) {
+                            stmt2 += `(JSON_CONTAINS(${alias}.${attr}->>"$${p}", CAST('${value}' AS JSON)))`;
+                        }
+                        else {
+                            stmt2 += `(JSON_CONTAINS(${alias}.${attr}, CAST('${value}' AS JSON)))`;                            
+                        }
+                    }
+                    else if (attr2 === '$overlaps') {
+                        // json_overlaps，多值的交叉关系
+                        const value = JSON.stringify(o[attr2]);
+                        if (stmt2) {
+                            stmt2 += ' and ';
+                        }
+                        if (p) {
+                            stmt2 += `(JSON_OVERLAPS(${alias}.${attr}->>"$${p}", CAST('${value}' AS JSON)))`;
+                        }
+                        else {
+                            stmt2 += `(JSON_OVERLAPS(${alias}.${attr}, CAST('${value}' AS JSON)))`;                            
+                        }
+                    }
+                    else if (attr2.startsWith('$')) {
+                        if (stmt2) {
+                            stmt2 += ' and ';
+                        }
+                        if (p) {
+                            stmt2 += `(${alias}.${attr}->>"$${p}" ${this.translatePredicate(attr2, o[attr2])})`;
+                        }
+                        else {
+                            stmt2 += `(${alias}.${attr} ${this.translatePredicate(attr2, o[attr2])})`;
                         }
                     }
                     else {
-                        translatePredicate(o[key], p2);
+                        // 继续子对象解构
+                        const part = translateInner(o[attr2], `${p}.${attr2}`);
+                        if (stmt2) {
+                            stmt2 += ' and ';
+                        }
+                        stmt2 += `${part}`;
                     }
                 }
             }
+            else {
+                // 直接的属性处理
+                if (stmt2) {
+                    stmt2 += ' and ';
+                }
+                if (typeof o === 'string') {
+                    if (p) {
+                        stmt2 += `(${alias}.${attr}->>"$${p}" = '${o}')`;
+                    }
+                    else {
+                        //  对根对象的字符串比较
+                        stmt2 += `(${alias}.${attr} = '${o}')`
+                    }
+                }
+                else {
+                    assert(p);
+                    stmt2 += `(${alias}.${attr}->>"$${p}" = ${o})`;
+                }
+            }
+            return stmt2;
         };
-        translatePredicate(predicate, '');
-        return stmt;
+
+        return translateInner(predicate, '');
     }
 
     protected translateObjectProjection(projection: Record<string, any>, alias: string, attr: string, prefix: string): string {
@@ -720,6 +756,9 @@ export class MySqlTranslator<ED extends EntityDict & BaseEntityDict> extends Sql
             }
             case '$floor': {
                 return 'FLOOR(%s)';
+            }
+            case '$mod': {
+                return 'MOD(%s, %s)';
             }
             case '$pow': {
                 assert(argumentNumber === 2);
