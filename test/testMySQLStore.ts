@@ -1467,7 +1467,6 @@ describe('test mysqlstore', function () {
             }
         }, context, {});
 
-        process.env.NODE_ENV = 'development';
         const row = await store.select('oper', {
             data: {
                 id: 1,
@@ -1488,8 +1487,35 @@ describe('test mysqlstore', function () {
             }
         }, context, {});
 
+        process.env.NODE_ENV = 'development';
+        const row2 = await store.select('oper', {
+            data: {
+                id: 1,
+                data: {
+                    name: 1,
+                    price: 1,
+                },
+            },
+            filter: {
+                id,
+                data: {
+                    '.$or': [
+                        {
+                            name: 'xc',
+                        },
+                        {
+                            name: {
+                               '.$includes': 'xc',
+                            }
+                        }
+                    ],
+                },
+            }
+        }, context, {});        
+
         await context.commit();
         assert(row.length === 1);
+        assert(row2.length === 1);
     });
 
     it('[1.12]complicated json filter', async () => {
