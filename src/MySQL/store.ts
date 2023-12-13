@@ -28,7 +28,7 @@ function convertGeoTextToObject(geoText: string): object {
 }
 
 export class MysqlStore<ED extends EntityDict & BaseEntityDict, Cxt extends AsyncContext<ED>> extends CascadeStore<ED> implements AsyncRowStore<ED, Cxt>{
-    protected aggregateSync<T extends keyof ED, OP extends SelectOption, Cxt extends SyncContext<ED>>(entity: T, aggregation: ED[T]['Aggregation'], context: Cxt, option: OP): AggregationResult<ED[T]['Schema']> {
+    protected aggregateAbjointRowSync<T extends keyof ED, OP extends SelectOption, Cxt extends SyncContext<ED>>(entity: T, aggregation: ED[T]['Aggregation'], context: Cxt, option: OP): AggregationResult<ED[T]['Schema']> {
         throw new Error('MySQL store不支持同步取数据，不应该跑到这儿');
     }
     protected selectAbjointRow<T extends keyof ED, OP extends SelectOption>(entity: T, selection: ED[T]['Selection'], context: SyncContext<ED>, option: OP): Partial<ED[T]['Schema']>[] {
@@ -47,7 +47,7 @@ export class MysqlStore<ED extends EntityDict & BaseEntityDict, Cxt extends Asyn
         this.connector = new MySqlConnector(configuration);
         this.translator = new MySqlTranslator(storageSchema);
     }
-    protected async aggregateAsync<T extends keyof ED, OP extends SelectOption, Cxt extends AsyncContext<ED>>(entity: T, aggregation: ED[T]['Aggregation'], context: Cxt, option: OP): Promise<AggregationResult<ED[T]['Schema']>> {
+    protected async aggregateAbjointRowAsync<T extends keyof ED, OP extends SelectOption, Cxt extends AsyncContext<ED>>(entity: T, aggregation: ED[T]['Aggregation'], context: Cxt, option: OP): Promise<AggregationResult<ED[T]['Schema']>> {
         const sql = this.translator.translateAggregate(entity, aggregation, option);
         const result = await this.connector.exec(sql, context.getCurrentTxnId());
         return this.formResult(entity, result);

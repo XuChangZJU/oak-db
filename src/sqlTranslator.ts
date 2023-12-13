@@ -672,6 +672,10 @@ export abstract class SqlTranslator<ED extends EntityDict & BaseEntityDict> {
             // between是所有数据库都支持的语法吗？
             return ` between ${values[0]} and ${values[1]}`;
         }
+        else if (predicate === '$mod') {
+            // %是所有数据库都支持的语法吗？
+            return ` % ${value[0]} = ${value[1]}`;
+        }
         else {
             assert(predicate === '$exists');
             if (value) {
