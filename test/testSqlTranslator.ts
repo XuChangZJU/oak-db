@@ -28,7 +28,7 @@ describe('test MysqlTranslator', function() {
     });
 
     it('test select', () => {
-        const sql = translator.translateSelect('token', {
+        let sql = translator.translateSelect('token', {
             data: {
                 id: 1,
                 $$createAt$$: 1,
@@ -38,6 +38,21 @@ describe('test MysqlTranslator', function() {
                     mobile: 1,
                 },
             },            
+        });
+        // console.log(sql);
+
+        // distinct
+        sql = translator.translateSelect('token', {
+            data: {
+                id: 1,
+                $$createAt$$: 1,
+                userId: 1,
+                mobile: {
+                    id: 1,
+                    mobile: 1,
+                },
+            },
+            distinct: true,
         });
         // console.log(sql);
     });
@@ -87,7 +102,7 @@ describe('test MysqlTranslator', function() {
     })
 
     it('test aggregation', () => {
-        const sql = translator.translateAggregate('token', {
+        let sql = translator.translateAggregate('token', {
             data: {
                 '#max-1': {
                     user: {
@@ -111,8 +126,30 @@ describe('test MysqlTranslator', function() {
             indexFrom: 0,
             count: 10,
         });
+
+        // distinct
+        sql = translator.translateAggregate('token', {
+            data: {
+                '#count-1': {
+                    user: {
+                        nickname: 1,
+                    },
+                },
+                distinct: true,
+            },
+            filter: {
+                user: {
+                    name: {
+                        $includes: 'xc',
+                    },
+                },
+            },
+            indexFrom: 0,
+            count: 10,
+            distinct: true,
+        });
         
-        // console.log(sql);
+        console.log(sql);
     });
 
     it('test or', () => {

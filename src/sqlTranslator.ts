@@ -1024,7 +1024,7 @@ export abstract class SqlTranslator<ED extends EntityDict & BaseEntityDict> {
         stmt: string;
         currentNumber: number;
     } {
-        const { data, filter, sorter, indexFrom, count } = selection;
+        const { data, filter, sorter, indexFrom, count, distinct } = selection;
         const { from: fromText, aliasDict, projectionRefAlias, filterRefAlias, currentNumber } = this.analyzeJoin(entity, {
             projection: data,
             filter,
@@ -1033,7 +1033,10 @@ export abstract class SqlTranslator<ED extends EntityDict & BaseEntityDict> {
         assert(intersection(keys(refAlias), keys(filterRefAlias)).length === 0, 'filter中的#node结点定义有重复');
         assign(refAlias, filterRefAlias);
 
-        const { projText } = this.translateProjection(entity, data, aliasDict, projectionRefAlias);
+        let { projText } = this.translateProjection(entity, data, aliasDict, projectionRefAlias);
+        if (distinct) {
+            projText = `distinct ${projText}`;
+        }
 
         const { stmt: filterText, currentNumber: currentNumber2 } = this.translateFilter(entity, filter, aliasDict, refAlias, currentNumber, option);
 
@@ -1057,7 +1060,7 @@ export abstract class SqlTranslator<ED extends EntityDict & BaseEntityDict> {
     }
 
     translateAggregate<T extends keyof ED, OP extends SqlSelectOption>(entity: T, aggregation: ED[T]['Aggregation'], option?: OP): string {
-        const { data, filter, sorter, indexFrom, count } = aggregation;
+        const { data, filter, sorter, indexFrom, count, distinct } = aggregation;
         const { from: fromText, aliasDict, projectionRefAlias, filterRefAlias, currentNumber } = this.analyzeJoin(entity, {
             aggregation: data,
             filter,
@@ -1068,7 +1071,7 @@ export abstract class SqlTranslator<ED extends EntityDict & BaseEntityDict> {
         let groupByText = '';
         for (const k in data) {
             if (k === '#aggr') {
-                const { projText: projSubText, as } = this.translateProjection(entity, data[k]!, aliasDict, projectionRefAlias, '#data');
+                const { projText: projSubText, as } = this.translateProjection(entity, data[k] as ED[T]['Selection']['data'], aliasDict, projectionRefAlias, '#data');
                 if (!projText) {
                     projText = projSubText;
                 }
@@ -1077,8 +1080,8 @@ export abstract class SqlTranslator<ED extends EntityDict & BaseEntityDict> {
                 }
                 groupByText = as;
             }
-            else {
-                const { projText: projSubText } = this.translateProjection(entity, (data as any)[k]!, aliasDict, projectionRefAlias, undefined, true);
+            else if (k.startsWith('#')){
+                let { projText: projSubText } = this.translateProjection(entity, (data as any)[k]!, aliasDict, projectionRefAlias, undefined, true);
                 let projSubText2 = '';
                 if (k.startsWith('#max')) {
                     projSubText2 = `max(${projSubText}) as \`${k}\``;
@@ -1087,12 +1090,21 @@ export abstract class SqlTranslator<ED extends EntityDict & BaseEntityDict> {
                     projSubText2 = `min(${projSubText}) as \`${k}\``;
                 }
                 else if (k.startsWith('#count')) {
+                    if (data.distinct) {
+                        projSubText = `distinct ${projSubText}`;
+                    }
                     projSubText2 = `count(${projSubText}) as \`${k}\``;
                 }
                 else if (k.startsWith('#sum')) {
+                    if (data.distinct) {
+                        projSubText = `distinct ${projSubText}`;
+                    }
                     projSubText2 = `sum(${projSubText}) as \`${k}\``;
                 }
                 else {
+                    if (data.distinct) {
+                        projSubText = `distinct ${projSubText}`;
+                    }
                     assert(k.startsWith('#avg'));
                     projSubText2 = `avg(${projSubText}) as \`${k}\``;
                 }
