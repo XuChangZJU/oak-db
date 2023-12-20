@@ -28,6 +28,9 @@ function convertGeoTextToObject(geoText: string): object {
 }
 
 export class MysqlStore<ED extends EntityDict & BaseEntityDict, Cxt extends AsyncContext<ED>> extends CascadeStore<ED> implements AsyncRowStore<ED, Cxt>{
+    protected countAbjointRow<T extends keyof ED, OP extends SelectOption, Cxt extends SyncContext<ED>>(entity: T, selection: Pick<ED[T]['Selection'], 'filter' | 'count'>, context: Cxt, option: OP): number {
+        throw new Error('MySQL store不支持同步取数据，不应该跑到这儿');
+    }
     protected aggregateAbjointRowSync<T extends keyof ED, OP extends SelectOption, Cxt extends SyncContext<ED>>(entity: T, aggregation: ED[T]['Aggregation'], context: Cxt, option: OP): AggregationResult<ED[T]['Schema']> {
         throw new Error('MySQL store不支持同步取数据，不应该跑到这儿');
     }
@@ -292,7 +295,7 @@ export class MysqlStore<ED extends EntityDict & BaseEntityDict, Cxt extends Asyn
         const result = await super.selectAsync(entity, selection, context, option);
         return result;
     }
-    protected async countAsync<T extends keyof ED>(entity: T, selection: Pick<ED[T]['Selection'], 'filter' | 'count'>, context: AsyncContext<ED>, option: SelectOption): Promise<number> {
+    protected async countAbjointRowAsync<T extends keyof ED>(entity: T, selection: Pick<ED[T]['Selection'], 'filter' | 'count'>, context: AsyncContext<ED>, option: SelectOption): Promise<number> {
         const sql = this.translator.translateCount(entity, selection, option);
 
         const result = await this.connector.exec(sql, context.getCurrentTxnId());
