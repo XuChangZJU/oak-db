@@ -982,6 +982,9 @@ export class MySqlTranslator<ED extends EntityDict & BaseEntityDict> extends Sql
         }
         if (option?.forUpdate) {
             sql += ' for update';
+            if (typeof option?.forUpdate === 'string') {
+                sql += ` ${option!.forUpdate}`;
+            }
         }
 
         return sql;
