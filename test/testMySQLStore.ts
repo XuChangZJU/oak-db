@@ -17,7 +17,7 @@ describe('test mysqlstore', function () {
             host: 'localhost',
             database: 'oakdb',
             user: 'root',
-            password: '',
+            password: 'root',
             charset: 'utf8mb4_general_ci',
             connectionLimit: 20,
         });
@@ -68,6 +68,8 @@ describe('test mysqlstore', function () {
                         userId: v4(),
                         entity: 'mobile',
                         entityId: v4(),
+                        refreshedAt: Date.now(),
+                        value: v4(),
                     }
                 }]
             } as EntityDict['user']['CreateSingle']['data']
@@ -97,6 +99,8 @@ describe('test mysqlstore', function () {
                         userId: v4(),
                         entity: 'mobile',
                         entityId: v4(),
+                        refreshedAt: Date.now(),
+                        value: v4(),
                     }
                 }]
             }
@@ -145,6 +149,8 @@ describe('test mysqlstore', function () {
                         userId: v4(),
                         entity: 'mobile',
                         entityId: v4(),
+                        refreshedAt: Date.now(),
+                        value: v4(),
                     }
                 }]
             }
@@ -163,6 +169,8 @@ describe('test mysqlstore', function () {
                 playerId: v4(),
                 entity: 'mobile',
                 entityId: v4(),
+                refreshedAt: Date.now(),
+                value: v4(),
             } as EntityDict['token']['CreateSingle']['data'],
         }, {});
 
@@ -224,6 +232,8 @@ describe('test mysqlstore', function () {
                         userId: v4(),
                         entity: 'mobile',
                         entityId: v4(),
+                        refreshedAt: Date.now(),
+                        value: v4(),
                     }
                 }]
             }
@@ -272,6 +282,8 @@ describe('test mysqlstore', function () {
                         userId: v4(),
                         entity: 'mobile',
                         entityId: v4(),
+                        refreshedAt: Date.now(),
+                        value: v4(),
                     }
                 }]
             }
@@ -1344,9 +1356,10 @@ describe('test mysqlstore', function () {
                     }, {
                         title: 'english',
                         price: 2,
-                    }]
+                    }],
                 },
                 targetEntity: 'bbb',
+                bornAt: 111,
             }
         }, context, {});
 
@@ -1441,6 +1454,35 @@ describe('test mysqlstore', function () {
         assert(row.length === 1, JSON.stringify(row));
         console.log(JSON.stringify(row));
         assert(row2.length === 0, JSON.stringify(row2));
+
+        const row3 = await store.select('actionAuth', {
+            data: {
+                id: 1,
+                deActions: 1,
+            },
+            filter: {
+                id,
+                deActions: {
+                    $exists: true,
+                }
+            }
+        }, context, {});
+
+        assert(row3.length === 1);
+        const row4 = await store.select('actionAuth', {
+            data: {
+                id: 1,
+                deActions: 1,
+            },
+            filter: {
+                id,
+                deActions: {
+                    $exists: false,
+                }
+            }
+        }, context, {});
+
+        assert(row4.length === 0);
     });
 
     it('[1.11.3]json escape', async () => {
@@ -1464,6 +1506,7 @@ describe('test mysqlstore', function () {
                     }],
                 },
                 targetEntity: 'bbb',
+                bornAt: 123,
             }
         }, context, {});
 
@@ -1534,6 +1577,7 @@ describe('test mysqlstore', function () {
                     price: [100, 400, 1000],
                 },
                 targetEntity: 'bbb',
+                bornAt: 123,
             }
         }, context, {});
 

@@ -13,10 +13,13 @@ export class TestContext extends AsyncContext<EntityDict> {
     isRoot(): boolean {
         return true;
     }
+    setCurrentUserId(userId: string | undefined): void {
+        throw new Error('Method not implemented.');        
+    }
     getCurrentUserId(allowUnloggedIn?: boolean | undefined): string | undefined {
         return 'test-root-id';
     }
-    toString(): string {
+    async toString(): Promise<string> {
         throw new Error('Method not implemented.');
     }
     allowUserUpdate(): boolean {
